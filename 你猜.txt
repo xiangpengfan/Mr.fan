@@ -97,6 +97,7 @@ isinstance：判断对象是否为指定类型
 用法:isinstance(对象,类型)
 常用类型：int/float/str/bool/Iterable等
 enumerate：同时获取元素的索引+对应的值
+enumerate英文释义列举枚举
 for i,value in enumerate(列表)
 也可以只获得索引或者值
 for i,_ in enumerate:只获得索引
@@ -213,6 +214,7 @@ def count():
 f1, f2, f3 = count()
 ------------------------------------------------------------------
 装饰器核心笔记
+装饰器：函数套函数，闭包的具体体现
 1. func.__name__
 作用：获取函数名称；函数被装饰后，默认会显示包装函数名wrapper
 2. 包装函数
@@ -1489,3 +1491,45 @@ for key, group in itertools.groupby('AAABBBCCAAA'):
 ...     print(key, list(group))  #groupby() #把迭代器中相邻的重复元素挑出来按组分开放
 itertools.groupby('AAABBBCCAAA'，函数) #将迭代对象做参数输入函数，按返回值分组相邻重复元素
 --------------------------------------------------------------------------------------------------------------
+__enter__和__exit__   #上下文管理器的创建方法
+给类加上这两个封装方法，就是允许该类实现上下文管理，主要有两个作用：
+1.允许在主代码前面和后面加上一些执行内容   
+2.允许和with搭配打造一个环境
+
+yield：包含yield的函数是一个迭代器函数，每次只会输出一个内容
+with：先执行__enter__，再执行with里的代码，再执行__exit__，收尾的执行相当于给函数创建了一个环境
+
+@contextmanager
+通过写一个主调函数调用B函数，在应用层，这个装饰器可以使任意B函数搭配with构建一个环境，并且很方便写入
+__enter__和__exit__的内容。以下：
+
+from contextlib import contextmanager
+@contextmanager
+def create_query(name):
+    print('Begin')
+    q = Query(name)
+    yield q
+    print('End')
+
+with create_query('Bob') as q:
+    q.query()
+yield之前的print('Begin')；q = Query(name)被打包成了__enter__部分，之后的print('End')被打包成了__exit__部分
+with先调用__enter__内容，再调用with里面的代码，最后调用__exit__内容
+我们可以很方便写入__enter__和__exit__的内容，并且在应用层给Query(name)类打造一个环境
+
+
+closing
+作为函数使用，默认给对象加上上下文管理功能，但无法自定义__enter__和__exit__的内容，以下：
+
+from contextlib import closing
+from urllib.request import urlopen
+
+with closing(urlopen('https://www.python.org')) as page
+相当于一个简化版的@contextmanager，事实上它就是通过@contextmanager编写的
+
+
+
+环境本质：为需要安全执行的代码块，封装必定执行的释放运行内存，或者停止修改环境之外的数据的逻辑，
+相当于给装了__enter__和__exit__的类上一个保险，在它因为意料之外的原因停止运行时，停止它对外的修改，并释放它占用的内存，以下：
+假如说我们写一个，读取硬盘的程序，如果读取的文件太大，电脑硬盘占满了，没加入环境的话，即使报错了也会持续运行，提前加入环境，收到报错信息他就会立刻停止运行，释放运行资源
+------------------------------------------------------------------------------------------------------------
