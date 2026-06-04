@@ -2054,6 +2054,9 @@ Socket模块分为客户端和服务端，我们从这两方面讲解它的实�
 
 
 客户端
+
+选择使用的协议和地址，创建socket-------->创建服务器连接connect-------->发送数据send-------->接收数据recv
+
 import socket
 
 s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)          #创建一个套接字对象
@@ -2082,6 +2085,9 @@ s.close()                #关闭tcp连接
 
 
 服务器
+
+选择使用的协议和地址，创建socket---------->选择接收数据的端口bind/listen------------>等待tcp连接，accept----------->发送数据send----->接收数据recv
+
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)     #仍然是创建一个套接字对象
 #因为服务器接收的信息量巨大，因此通常需要两个套接字对象，一个负责接收信息一个负责发送信息
 #这是第一个，这个套接字对象只接收信息和监听端口，不给用户返回信息
@@ -2093,7 +2099,7 @@ s.bind(('127.0.0.1', 9999))     #绑定端口，两个参数一个是服务器�
 s.listen(5)            #开始监听端口，参数表示这个端口最多排队排5个链接
 
 while True:
-    sock, addr = s.accept()           #这里返回两个对象，一个是新的sock对象一个是客户端的地址addr
+    sock, addr = s.accept()           #接收数据,这里返回两个对象，一个是新的sock对象一个是客户端的地址addr
     t = threading.Thread(target=tcplink, args=(sock, addr))         #target是线程运行的目标函数，args是目标函数需要的参数，带入目标函数中
     t.start()                                    #这里我们通过建立一个新线程来向客户端发送信息
 
@@ -2107,8 +2113,124 @@ Tcp链接通过四元组来区分每一条链接：(客户端IP, 客户端端口
 客户端和服务器端口都不同
 考虑到服务器本来就要接收很多Tcp连接，承受极大的并发压力，所以我们把建立新端口的任务转嫁到客户端上，客户端建立两个不同的端口来区分Tcp链接，而服务器只需要借助区分好的链接发送不同的信息就可以了
 
-tcp协议把区分tcp的复杂性转嫁给客户，这种多端口对一端口的网络服务模式，就是现代网络系统可以处理高并发的基石
+tcp协议把区分tcp的复杂性转嫁给客户，这种多端口对一端口的网络服务模式，是现代网络系统可以处理高并发的基石
 |——、
 |————服务器端口，
 |——/
 --------------------------------------------------------------------------------------------------------------------------
+UDP：传输层的协议，相较于TCP更快但不稳定
+TCP：客户端向服务器首次发送首数据，服务器会自动返回ACK，客户端接收到ACK后再向其返回ACK，这一个半的发送流程可以保证服务器和客户端互相确认彼此的接收和发送功能都正常，并且TCP为了保证连接的稳定性它的数据包头部有20个字节，因此耗时更久，所以TCP稳定但是慢
+UDP：就像两个客户端在通信，发送方只管发送不管对方有没有收到，并且UDP头部也不会去确认连接的可靠性因此它的头部只有8个字节，所以UDP快但是不稳定
+
+UDP实现方式
+客户端
+创建套接字对象------------>发送数据，发送时传入端口数据------------>接收数据
+服务器
+创建套接字对象---------->绑定服务器端口------------>接收数据------------>发送数据
+
+具体的代码实现方式
+客户端
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)   #创建套接字对象
+s.sendto(data, ('127.0.0.1', 9999))       #发送数据，并把端口做参数传入
+s.recv(1024).decode('utf-8')                 #接收数据
+服务器
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  #创建服务器对象
+s.bind(('127.0.0.1', 9999))    #绑定ip接口
+data, addr = s.recvfrom(1024)    #阻塞等待接收数据
+s.sendto(b'Hello, %s!' % data, addr)  #发送数据
+
+sendto和send的区别：send只能在已经建立的连接通道中点对点发送数据，sendto可以发送给任何对象，只需把地址作为参数传入sendto
+send（待发送的二进制数据）
+sendto（待发送的二进制数据，地址）
+
+recvfrom和recv的区别，都是负责接收信息，都是一行接收一次信息，但是recvfrom自带阻塞而recv直接接收
+------------------------------------------------------------------------------------------------------------------------------
+电子邮件是一种更早的信息传递方式，早于互联网
+
+发送邮件的步骤可以分为4步
+根据内容选择模块------------>构建文件头和文件内容---------->连接服务器发送邮件
+头主要包括三步分内容，邮件标题Subject，接收方的名称和地址，发送方的名称和地址
+
+
+
+可选择的模块通常有三种：
+
+MIMEText：构建文本形式的邮件
+MIMEText('文本内容','子类型','编码格式')     #文本内容是你要写在邮件中的内容；子类型是plain文本/html网页语言；编码格式是文本的编码格式utf-8/ascii
+MIMEMultipart：构建文本和图片形式复合邮件
+MIMEBase：构建各种格式的邮件，但使用起来更加复杂
+
+
+
+构建邮件头和邮件内容
+多数邮件内容在构建的定义的时候直接输入即可，而邮件头则有一套自己的构建方法
+
+MIMEText
+邮寄头有自己专属的表达格式RFC2047，属于ascii格式中的一种，网络传输只能传输字节流，所以，utf-8---------->邮件头格式RFC2047------------>二进制形式，以下：
+utf-8：Python爱好者
+邮件头格式：=?utf-8?b?5byg5LiJ?=
+邮件头字节形式：=?utf-8?b?UHl0aG9u54ix5aW96ICF?=
+
+创建邮件对象msg
+邮件标题：msg['Subject']=Header('标题内容'，‘utf-8’).encode('utf-8')   
+收件人信息：msg['From']=formataddr((Header(name, 'utf-8').encode(), addr))         
+发件人信息：msg['To']=formataddr((Header(name, 'utf-8').encode(), addr))
+formataddr函数可以把RFC2047二进制格式和地址拼接起来
+这里相对复杂我们把它打包成函数
+def formt_addr(name,addr):
+           return  formataddr((Header(name, 'utf-8').encode(), addr)) 
+
+优化：这里面最大的问题是name必须严格按照Header的规则去写，对用户来说这不是一个好的体验
+引入name, addr = parseaddr(s)，将各种name和addr的输入统一管理，有效处理相似性情况
+def _format_addr(s):
+    name, addr = parseaddr(s)
+    return formataddr((Header(name, 'utf-8').encode(), addr))
+name无论是带<>，""或者根本不存在，都可以正常的解析处理
+
+
+MIMEMultipart
+多部分邮件对象本身不写头和内容，靠其它文件内容组合生成内容，以下文本邮件内容和图片文件内容组合获取：
+msg = MIMEMultipart()
+msg.attach(MIMEText('文本内容', 'plain', 'utf-8'))          #导入文本邮件对象
+msg.attach(MIMEImage('图片内容', 'png', filename='文件名称'))   #导入图片邮件对象
+
+构建文件头
+和MIMEText()邮件头的构建方法相同
+msg['From'] = _format_addr('Python爱好者 <%s>' % from_addr)
+msg['To'] = _format_addr('管理员 <%s>' % to_addr)
+msg['Subject'] = Header('来自SMTP的问候……', 'utf-8').encode()
+__format_addr函数请参考MIMEText邮件头的构建方法
+
+
+MIMEBase
+基础邮件对象可以构建任意类型的邮件对象，但邮件内容无法在定义时直接输入
+msg=MIMEBase(内容类型，子类型，filename=文件名称)                  #我们先定义一共骨架
+msg.set_payload(file)                                                                           #将文件内容导入到骨架中，生成一个实例
+encoders.encode_base64(msg)                                                           #将文件内容转化成二进制形式
+MIMEBase功能很强大，但是用起来很麻烦，所以不到万不得已，我们一般只使用专门化的构建模块
+另外，如果是构建文本邮件对象
+mime.set_charset('utf-8')        #可以导入编码类型                                                               
+
+构建邮件头
+区别于文本邮件对象，这里构建附件的邮件头
+mime.add_header('Content-Disposition', 'attachment', filename='test.png')                 #表示这是文件的头部信息，attachment表示该文件的附件，filename=定名字
+mime.add_header('Content-ID', '<0>')                                                         #创建一个抓手，可以在主文本内容中引用
+在主文本中加入<p><img src="cid:0"></p>可以读取这张图片
+mime.add_header('X-Attachment-Id', '0')                                                     #创建一个抓手，运营商可以读取这个抓手然后对该图片做处理
+
+
+
+连接服务器发送邮件
+sever=smtplib.SMTP('服务器地址'，端口号)                                           #创建一个smtp客户端对象，这个对象已经连接上了服务器
+sever..set_debuglevel(1)                                                                         #可以打印与服务器交互的各种信息
+#包括报错信息，调试信息，连接信息，加密信息等，这些信息可以帮助我们判断连接情况
+sever.login(邮箱地址, 登录密码/登录口令)                                               #登录客户端或者叫登录邮箱
+server.sendmail(邮箱地址, [对方邮箱地址], 邮箱内容转文本)                  #发送邮件
+#邮件可能发送给很多的人，所以对方的邮箱地址是一个列表，可以包含了很多的邮箱地址
+
+注意：在创建smtp客户端对象后立刻调用starttls方法，可以对传输内容进行加密，这在一些服务商中是必须的，如：gmail，以下：
+server = smtplib.SMTP(smtp_server, smtp_port)
+server.starttls()  
+小提示：很多邮件收件人名称会被改成用户自己的id，但是用户显示其它人的名称不变，以下：
+一封邮件发送给小王、小李、小张，小王收到邮件，收件人处，自己的名字被替换为了尊敬的王先生，其它人名字维持原样----收件人：尊敬的小王、小李、小张
+---------------------------------------------------------------------------------------------------------------------------------
