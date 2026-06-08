@@ -2165,6 +2165,13 @@ MIMEBase：构建各种格式的邮件，但使用起来更加复杂
 构建邮件头和邮件内容
 多数邮件内容在构建的定义的时候直接输入即可，而邮件头则有一套自己的构建方法
 
+from email import encoders
+from email.header import Header
+from email.mime.text import MIMEText
+from email.utils import parseaddr, formataddr
+import smtplib
+
+
 MIMEText
 邮寄头有自己专属的表达格式RFC2047，属于ascii格式中的一种，网络传输只能传输字节流，所以，utf-8---------->邮件头格式RFC2047------------>二进制形式，以下：
 utf-8：Python爱好者
@@ -2233,4 +2240,171 @@ server = smtplib.SMTP(smtp_server, smtp_port)
 server.starttls()  
 小提示：很多邮件收件人名称会被改成用户自己的id，但是用户显示其它人的名称不变，以下：
 一封邮件发送给小王、小李、小张，小王收到邮件，收件人处，自己的名字被替换为了尊敬的王先生，其它人名字维持原样----收件人：尊敬的小王、小李、小张
+---------------------------------------------------------------------------------------------------------------------------------
+接收邮件分为2步：邮件下载到本地-------->解析邮件内容
+下面笔记以这2步为骨架解析邮件接收的实现方式
+
+第一步：把邮件加载到本地
+创建pop3客户端对象--------->输入账号和密码----------->返回邮件编号目录---------------> 返回某一封邮件的具体信息
+import poplib
+server=poplib.POP3(服务器地址，port=端口号)    #若不输入端口号则会使用默认的端口号，端口号可以查询运营商文档
+server.user(用户)  
+server.pass_(密码)                #输入账号和密码
+resp响应信息,mails(索引,邮件名称),octets邮件完整数据=server.list                                                      #所有邮件组成的列表
+resp,响应信息,lines[邮件第一行数据,第二行数据,第三行......],octets邮件完整数据=server.retr(索引)     #单个邮件的具体信息
+msg_content=b'\r\n'.join(lines).decode('utf-8')                                        #拼接邮件信息并解码成文本格式
+msg = Parser().parsestr(msg_content)                                                   #解析邮件对象,还原邮件对象的结构
+#这里只是还原结构和字节数据解码为ascii，并不会解码ascii中的QP编码信息
+server.quit()                                                                           #关闭连接
+
+一些有用的方法
+server.set_debuglevel(1)                               #与服务器的交互信息
+server.getwelcome().decode('utf-8')              #打印pop3连接成功的欢迎信息，也可以不打印
+
+对于文本邮件对象来说到这里已经结束了,但多部分邮件对象需要继续手动解析
+content = msg.get_payload()                   #如果文本邮件对象这里返回文本内容信息
+parts = msg.get_payload()                       #如果是多部分邮件对象,这里返回的多部分的每一部分的解析对象
+
+
+
+第二步：解析邮件内容
+
+在解析内容之前我们先捋一下最终字节流的结构
+邮件头部
+原始数据:邮箱地址------->文本数据:邮箱头部QP信息格式-------->字节数据:字节流
+原始数据:收件人/发件人姓名-------->文本数据:邮箱头部QP信息格式------->文本数据:转二进制码保证可写入ascii--------->字节数据:字节流
+邮件内容
+文本--------->字节数据------->ascii字符串------->字节数据
+邮件头部必须转为头部格式再转为字节流，邮箱内容可以直接转为字节流
+
+
+对于文本邮件对象
+msg = Parser().parsestr(msg_content)只能解析结构，返回一个Message信息，parser只会解析一层，剩下层还需要手动解析
+对于多部分邮件对象
+msg = Parser().parsestr(msg_content)只能解析结构，返回一个结构列表['头部信息',MIMEText，MIMEBase....]，需要手动构建解析结构
+结合上文的数据编码结构：
+头部地址信息已经经过反字节解码，只需反QP编码即可；头部中文信息需要先经过反字节解码得到ascii，再进行反QP编码
+parser解析的内容会得到很多的传输信息，正文信息从‘--_000_DM6PR12MB3099DB0406784412C0396202B81E2DM6PR12MB3099namp_’开始
+
+MIMEText,MIMEBase等内容部分，没有反字节解码，需要进行反字节解码
+
+from email.parser import Parser
+from email.header import decode_header
+from email.utils import parseaddr
+import poplib
+
+
+第一步打印邮件头
+邮件头由三部分构成from，to，subject
+from，to：名称<邮件地址>，解析的时候需要把名称parser解析出来，单独decode_str反头部处理
+subject：标题内容，解析的时候直接整体decode_str反头部处理
+
+实现方式
+for header_info in [from,to,subject]:       
+      value=msg[header_info]                   #建立列表把头部信息摘取出来
+      if header_info=='subject'：               #标题内容单独处理
+              value=decode_str(value)          #直接解码就可以了
+      else：                                               #收件人和发件人处理方法相同，放在一起处理
+              name,addr=pareser(value)       
+              name=decode_str(name)         #把名称解析出来，单独做反头部处理
+              value=‘name’+addr
+      print('f{header_info}:{value}')             #三次循环统一打印 
+
+关于自定义方法decode_str
+作用：反头部编码，将被头部编码格式编码的文本恢复为原始文本
+def decode_str(s):
+    value, charset = decode_header(s)[0]          #decode_headers是自带的反头部编码方法，解码ascii数据中的QP编码信息，并返回原始数据的完整二进制字节
+    if charset:
+        value = value.decode(charset)                 #把二进制数据翻译成文本数据
+    return value
+
+
+第二步打印印邮件内容
+邮件主体内容通常由两个类型构成：文本和附件
+首先确定它包含几个文本几个附件，再把每一个文本和附件单独处理
+if (msg.is_multipart()):
+      parts=msg.get_payload()                  #分别解析各部分并组合返回一个解析列表
+#解析列表：多部分邮件的每一部分分别parser解析，解析结果组合成的一个列表
+      for n, part in enumerate(parts):
+             print('%spart %s' % ('  ' * indent, n))
+             print('%s--------------------' % ('  ' * indent))
+             print_info(part, indent + 1)          #循环打印每一部分内容并附上分割线
+else：                                                      #下面是处理文本和附件的方法
+       content_type = msg.get_content_type()           #文本邮件对像反字节需要两个数据：文本内容和编码方式
+        if content_type=='text/plain' or content_type=='text/html':     #这里用来确定处理的对象是文本对象，而不是多部分对象
+            content = msg.get_payload(decode=True)  #对文本文件内容，做一次解码后，提取内容
+            charset = guess_charset(msg)                     #提取编码方式
+            if charset:
+                content = content.decode(charset)           #用编码方式解码
+            print('%sText: %s' % ('  ' * indent, content + '...'))
+        else:
+            print('%sAttachment: %s' % ('  ' * indent, content_type))    #附件内容直接打印不需要处理
+
+关于自定义方法guess_charset
+def guess_charset(zmsg):                                          
+    charset = zmsg.get_charset()                                 #返回文本的编码方式
+    if charset is None:                                                   
+        content_type = zmsg.get('Content-Type', '').lower()  
+        pos = content_type.find('charset=')                     #如果get_charset找不到编码格式,就去Content-Type里面找，这里pos指向c的位置
+        if pos >= 0:                                                           #根据索引打印出编码内容
+            charset = content_type[pos + 8:].strip()           #pos+8其实就是charset=后的值，charset=正好8个字符
+    return charset
+
+注意：网易邮箱默认打印两部分文本内容，以适应不能接收html的老式邮箱和新式邮箱
+我们在网页客户端常常写的邮件结构是这样的：文件通常的结构是第一部分是主体，主体中内容和图片分别是第一部分第二部分，第二部分是附件，第三部分是第二个附件
+邮件----多部分邮件对象
+├── 主体----多部分邮件对象
+│   ├── HTML
+│   └── 图片
+├── 附件1 (PDF)
+└── 附件2 (JPEG)
+----------------------------------------------------------------------------------------------------------------------------------
+数据库：为了便于保存和存储数据，而且能够通过条件快速查询到指定数据
+关系数据库：基于表的一对多模式存储数据
+在给编程语言配置完数据库驱动后就可以操作数据库了
+#驱动：把代码语言翻译成数据库语言
+
+操作数据库增删改查一共分为3步
+1.开始：创建数据库连接--------->创建命令对象
+2.执行数据库指令：执行数据库指令-------->确认指令：提交或者抓取
+3.关闭：关闭命令行对象--------->关闭数据库连接
+
+
+
+数据库增添内容和查询内容的实现方式
+添加内容
+创建数据库连接，创建命令对象------------------->执行SQL指令,提交/抓取，确认指令----------------->关闭数据库连接，关闭命令对象
+conn=sqlites.connect('test.py')     #创建数据库的表单连接，如果没有这个表单，代码就会在数据库中创建一个这个表单
+#连接connection：程序操作数据库的一个方式，一个程序操作数据库就建立一条连接，多个程序操作数据库就建立多条连接
+
+cursor=conn.cursor()                    #创建命令对象，数据库的动作操作是通过该命令对象实现的
+#游标Cursor，命令对象：操作数据库的一双手，我们通过这双手来操作数据库拿取我们想要的数据
+#如果把数据库想象成一个仓库的话，命令对象就像是一共从仓库中不停给我们搬运整理货物的强壮的服务者
+#通过一个发令者，来控制很多执行者来完成某一个任务的模式称之为命令模式
+#这种一对多的模式设计区分 命令下达者和执行者  ，使用户使用时更加的轻便
+
+cursor.execute('create table user (id varchar(20) primary key, name varchar(20))')     
+cursor.execute('insert into user (id, name) values (\'1\', \'Michael\')')              #执行SQL语句
+#这两句SQL语句的关键点：
+#primary key：主键，每行数据的身份证，不能为空，不能重复
+#\‘:转义引号代表这个引号是字符串内容，不是结束符
+
+cursor.rowcount                             #打印插入的函数，这是在确认插入前的检查措施
+conn.commit()                                #确认指令，提交
+cursor.close()                                 #关闭命令对象
+#数据库必须及时关闭，否则会一直占用数据库连接，导致其它进程访问数据库受阻，同时占用程序资源，使程序运行变慢
+
+conn.close()                                   #关闭数据库连接
+
+
+查找内容
+创建数据库连接，创建命令对象------------------->执行SQL指令,提交/抓取，确认指令----------------->关闭数据库连接，关闭命令对象
+conn=sqlites.connect('test.py')     #建立数据库连接
+cursor=conn.cursor()                    #创建命令对象
+
+cursor.excute('select * from user where id=?', ('1',))      #执行数据库指令
+value=cursor.fetchall()                                                    #确认指令抓取内容
+
+cursor.close()                                 #关闭命令对象
+conn.close()                                   #关闭数据库连接
 ---------------------------------------------------------------------------------------------------------------------------------
