@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>风景展示页</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            text-align: center;
+            padding: 30px 20px;
+            font-family: "微软雅黑", sans-serif;
+        }
+        /* 顶部欢迎文字：红色、加粗、加大字号 */
+        .welcome {
+            font-size: 24px;
+            font-weight: bold;
+            color: #f03838;
+            margin-bottom: 30px;
+        }
+        /* 画框容器：确保居中 */
+        .frame-container {
+            display: inline-block;
+        }
+        /* 画框样式 */
+        .frame {
+            padding: 15px;
+            border: 8px solid #8b5a2b;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        /* 风景图片 */
+        .scenery-img {
+            width: 500px;
+            height: 320px;
+            object-fit: cover;
+            display: block;
+        }
+        /* 按钮容器：确保和画框同宽居中 */
+        .button-container {
+            text-align: center;
+        }
+        /* 按钮样式：文字36px + 文字阴影 */
+        #changeBtn {
+            padding: 12px 40px;
+            font-size: 48px;
+            font-weight: normal;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            border: none;
+            border-radius: 6px;
+            background-color: #2d8cf0;
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #changeBtn:hover {
+            background-color: #1b76d8;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部用户名区域 -->
+    <div class="welcome">欢迎您，{{ username }}</div>
+
+    <!-- 中间带画框图片容器 -->
+    <div class="frame-container">
+        <div class="frame">
+            <img id="scenery" class="scenery-img" src="https://picsum.photos/id/10/500/320" alt="风景画">
+        </div>
+        <!-- 按钮放在和画框同一容器内，确保居中 -->
+        <div class="button-container">
+            <button id="changeBtn">换一个</button>
+        </div>
+    </div>
+
+    <script>
+        const imgList = [
+            "https://picsum.photos/id/10/500/320",
+            "https://picsum.photos/id/11/500/320",
+            "https://picsum.photos/id/12/500/320",
+            "https://picsum.photos/id/13/500/320",
+            "https://picsum.photos/id/14/500/320"
+        ];
+        let currentIndex = 0;
+
+        const imgDom = document.getElementById('scenery');
+        const btnDom = document.getElementById('changeBtn');
+
+        btnDom.addEventListener('click', () => {
+            currentIndex++;
+            if (currentIndex >= imgList.length) {
+                currentIndex = 0;
+            }
+            imgDom.src = imgList[currentIndex];
+        });
+    </script>
+</body>
+</html>

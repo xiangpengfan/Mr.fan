@@ -1,0 +1,144 @@
+<!-- 
+<html>
+    <head>
+        <title>请登录</title>
+        <meta charset="utf-8">
+    </head>
+    <style>
+        .form-label {
+        display: inline-block;
+        width: 80px;
+        text-align: right;
+        }
+    </style>
+    <body>
+        {% if message %}    
+        这是jinja2的判断语法，用来判断下面到底有没有值
+                <p style="color:red;">{{ message }}</p>
+        {% endif %}
+        <form action="/signin" method="post">     
+            这是一表单标签，把数据以post形式提交到/signin，如果没有/signin，就无法提交
+            会提交<form>表单中所有的带name属性的控件的数据
+            <p><span class="form-label">用户名:</span><input type="text" name="username"></p>
+            <p><span class="form-label">密 码:</span><input type="password" name="password"></p>
+            <button type="submit">登录</button>
+        </form>
+    </body>
+</html>
+
+url就是api的一种，所以前端想要跳转网页直接调用后url就可以了
+，就像<form action="/signin" method="post">一样
+
+这是我自己写的，下面是ai优化的，直接用下面的就好 -->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>请登录</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "微软雅黑", sans-serif;
+        }
+
+        body {
+            /* 页面垂直+水平居中 */
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f2f5;
+        }
+
+        /* 登录卡片主体 */
+        .login-box {
+            width: 420px;
+            padding: 40px 30px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 错误提示文字 */
+        .tip {
+            text-align: center;
+            color: red;
+            margin-bottom: 20px;
+            font-size: 15px;
+        }
+
+        /* 表单行 */
+        .form-item {
+            margin: 18px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        /* 标签：固定宽度 + 右对齐 */
+        .form-label {
+            display: inline-block;
+            width: 80px;
+            text-align: right;
+            font-size: 16px;
+            color: #333;
+            margin-right: 12px;
+        }
+
+        /* 输入框统一样式 */
+        .form-item input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .form-item input:focus {
+            border-color: #2d8cf0;
+        }
+
+        /* 登录按钮 */
+        .login-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 11px;
+            background-color: #2d8cf0;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 17px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .login-btn:hover {
+            background-color: #1b76d8;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <!-- Jinja2 错误提示 -->
+        {% if message %}
+            <p class="tip">{{ message }}</p>
+        {% endif %}
+
+        <form action="/signin" method="post">
+            <div class="form-item">
+                <span class="form-label">用户名:</span>
+                <input type="text" name="username" placeholder="请输入用户名">
+            </div>
+            <div class="form-item">
+                <span class="form-label">密 码:</span>
+                <input type="password" name="password" placeholder="请输入密码">
+            </div>
+            <button class="login-btn" type="submit">登录</button>
+        </form>
+    </div>
+</body>
+</html>
