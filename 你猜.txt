@@ -1989,6 +1989,17 @@ git commit -m "rename"                      #把  修改文件名的动作  提�
 git push                                             #把修改后的仓库+修改动作上传到github
 
 总体流程：下载仓库到本地------>修改名称------->记录修改名称的动作----------->上传到github
+
+
+#有时候提交不上去需要开代理，代理需要端口号，端口号在‘设置--->代理--->手动设置代理’中查看
+在代理之前先清除代理残留
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+git config --global --unset http.https://github.com.proxy
+# 替换查到的代理端口为你软件实际端口
+git config --global http.https://github.com.proxy socks5://127.0.0.1:端口   #SOCKS5 代理
+git config --global http.https://github.com.proxy http://127.0.0.1:端口       #HTTP 代理
+
 ------------------------------------------------------------------------------------------------------------------------
 海龟绘图turtle：一种操作小海龟移动而实现绘图的简单绘图方法
 海龟绘图的xy轴的中心点是图形的正中心
