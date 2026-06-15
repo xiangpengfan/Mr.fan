@@ -1983,6 +1983,8 @@ import tkinter.messagebox as messagebox        #导入一个小模块，并把�
 
 关于github修改文件夹名字
 git clone https://github.com/你的账号/你的仓库.git    #把github仓库下载到本地
+#git clone -b FastAPI --single-branch https://github.com/xiangpengfan/Mr.fan.git
+#加上-b可以只下载分支
 cd 你的仓库                                       #进入文件夹
 git mv 旧文件夹名 新文件夹名           #修改文件名，并把  修改文件名的这个动作  暂存到缓存区
 git commit -m "rename"                      #把  修改文件名的动作  提交到仓库中
@@ -1995,11 +1997,16 @@ git push                                             #把修改后的仓库+修�
 在代理之前先清除代理残留
 git config --global --unset http.proxy
 git config --global --unset https.proxy
-git config --global --unset http.https://github.com.proxy
+git config --global --unset http.https://github.com.proxy   #优先使用这个
 # 替换查到的代理端口为你软件实际端口
 git config --global http.https://github.com.proxy socks5://127.0.0.1:端口   #SOCKS5 代理
 git config --global http.https://github.com.proxy http://127.0.0.1:端口       #HTTP 代理
 
+git config --global --get "http.https://github.com.proxy"  #查看代理
+
+代理必须在github库中才能查看
+
+很多时候其实没啥用，最好就是开个好点的vpn
 ------------------------------------------------------------------------------------------------------------------------
 海龟绘图turtle：一种操作小海龟移动而实现绘图的简单绘图方法
 海龟绘图的xy轴的中心点是图形的正中心
