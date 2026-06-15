@@ -1,6 +1,0 @@
-先用打开虚拟环境----------打开网站-----------操作‘用这个requests文件来访问网站’来访问网站
-
-如果之前没有使用过venv虚拟环境
-需要先运行
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser 
-使powershell命令行可以运行虚拟环境
