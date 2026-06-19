@@ -259,3 +259,74 @@ class Item(BaseModel):
 定义时声明了参数类型，但是既没有继承BaseModel子类，又没有与路由中的‘{可变路径}’同名，那么这个参数就是查询参数
 可以从路由的？后面捕获数据，并用参数接收
 --------------------------------------------------------------------------------------------------------------------------------------------------------
+查询参数的校验：
+筛选出我们想要的查询参数，扔掉或者拒收我们不想要的查询参数
+
+
+实现方式
+1.方法介绍
+Annotated(数据类型，元数据对象1，元数据对象2.。。。。)
+元数据：用来描述数据的数据；
+元数据对象：把一堆元数据规则、配置打包成一个独立 Python 实例对象；就是一组描述数据
+该方法只接收一组一组的元数据，而不接收单个的元数据
+Query(筛选条件)
+Query表示该请求参数的类型为查询参数
+在Query中加入筛选条件，并将Query这个元数据对象传入Annotated达到校验的目的
+
+
+2.代码实现
+@app.get("/items/")
+async def read_items(
+    q: Annotated[str | None, Query(min_length=3, max_length=50)] = None,#这个筛选表示字符串的长度必须是3-50之间
+):
+#用Annotated包裹参数类型，给Query传入筛选条件并作为元数据传入Annotated，最终达到校验的目的
+注意：这两个方法的嵌套使用并不影响参数多类型，默认值，必填参数等的定义，这些用来描述参数特性的方式，还是按照原来的方式使用
+以下：
+q: Annotated[str | None, Query(min_length=3, max_length=50)]
+#q未声明默认值，所以q是必填参数------和原来的必填参数创建方式相同
+
+
+3.其它参数类型
+筛选参数-----‘正则表达式’
+q: Annotated[str | None, Query(min_length=3, pattern=‘正则表达式’)] 
+#这表示q是一个必选参数，最小值是3并且必须符合正则表达式
+#正则表达式只能形容字符串不能形容列表
+
+文档展示参数
+q: Annotated[str | None, Query(min_length=3, title="参数重命名")] 
+#这样就可以在redoc文档中看到这个参数的新名字
+#还可以在文档中加上对参数的描述，description="这是对参数的描述"，这个可以在交互文档中查看
+
+别名参数
+允许参数在路由中使用任意的名称
+q: Annotated[str | None, Query(min_length=3, alias="一些超规的命名方式")]
+#因为在python后端中，命名变量的方式是有限的，而变量必须和路由中输入的参数同名称
+#用alias以字符串的形式来代替查询参数接收路由中对应的变量名，这大大拓展了查询参数中变量名的合规格式
+
+
+4.Query只代表查询参数
+#所有声明容器类型的请求参数，默认从请求体中捕获数据
+#使用Annotated和Query的参数类型，即使声明了容器类型，也仍然是查询参数，即从路由？后获取数据，以下：
+q: Annotated[list[str], Query()] = ["foo", "bar"]
+#这表示列表q是一个查询参数，并且默认值是["foo", "bar"]
+
+
+
+自定义校验
+当Annotated[数据类型, Query()]无法完成校验时，我们需要自定义函数校验，以下：
+导入新的元数据对象，一个类
+from pydantic import AfterValidator
+
+先定义校验函数
+def check_valid_id(id: str):
+    if not id.startswith(("isbn-", "imdb-")):    #数据前面的字符是"isbn-", "imdb-"可以通过校验
+        raise ValueError('Invalid ID format, it must start with "isbn-" or "imdb-"')
+    return id
+
+把校验函数传入该模块
+@app.get("/items/")
+async def read_items(
+    id: Annotated[str | None, AfterValidator(check_valid_id)] = None,
+):
+#校验函数可以处理很复杂的校验
+-------------------------------------------------------------------------------------------------------------------------------------------------------
