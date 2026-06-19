@@ -189,25 +189,73 @@ async def read_file(file_path: str):
 http://127.0.0.1:8000/items/?skip=0&limit=10    #查询时加载路由？后，以&连接
 
 
-查询参数：声明数据类型和设置默认值
+查询参数：类型声明和默认值的设置
 
-设置类型
-在处理函数的参数中可以设置参数的类型，包括多类型。以下：
+声明类型
+和路由参数定义一样，查询参数也可以声明类型，包括多类型。以下：
 @app.get("/items/{item_id}")
 async def read_item(item_id: str, q: int | None = None，skip:bool=false):       #给可选参数q设置int或者None类型
 
-类型转换：在部分时候，为符合函数参数的类型标准，fastapi会对路径中输入的参数做参数类型的转换 以下：
+类型转换：字符串str和数字int可以在输入时相互转换。以下：
 http://127.0.0.1:8000/items/？q=12       #路径参数默认是str形式，函数参数只接受int形式，会在框架中做默认转换
 http://127.0.0.1:8000/items/?skip=20    #任何数值的数据除0外，都会被转换为bool值true
 
 
 设置默认值
-就像路径参数定义时一样，查询参数定义时业可以设置默认值，以下：
+就像路径参数定义时一样，查询参数定义时也可以设置默认值，以下：
 @app.get("/items/")
 async def read_item(skip: int = 0, limit: int = 10):   #设置默认值后，即使在访问时未输入查询参数，函数也会以参数函数的默认值允许
 
 必选查询参数
-未设置默认值的参数必须传入，否则会报错，这种参数被称为必选参数。以下：
+没有设置默认值的参数称为必选参数，访问时必须传入路由，否则会报错，以下：         #传入路由的方式可以参照本节首段
 @app.get("/items/")
 async def read_item(skip: int, limit: int):                 #在访问/items必须传入skip和limit，否则函数无法运行
 -----------------------------------------------------------------------------------------------------------------------------------------------
+请求参数----用来处理和获取请求体数据
+
+获取数据，从请求体中
+定义Basemodel子类，并在处理函数中声明该类，对应的参数会自动捕捉请求体中的同名数据，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None          #定义Basemodel子类
+
+@app.post("/items/")
+async def create_item(item: Item):    #在函数中声明它，参数item会自动捕获请求体中的同名数据
+注意：和路由参数与查询参数类似，请求体参数也可以声明类型，设置必选参数，设置默认参数，不过都是在BaseModel子类中设置
+
+
+使用数据
+和类调用属性相同，通过类.方法(),来使用捕获的数据
+@app.post("/items/")
+async def create_item(item: Item)：
+         item.name=name的值
+         item.description=description的值
+         item.price=price的值
+         item.tax=tax的值
+注意：同样是创建类，使用枚举，可以严格限制参数的可选范围，将其锁定在预先定义好的几个合法值中；使用Basemodel子类，则是可以使参数直接从前端捕获数据。这有重大区别，并且枚举类可以作为Basemodel子类的属性类型声明，限制子类属性的取值范围，以下：
+class enum(Enum):
+    str1 = "a"                 
+    str2 = "b"
+    str3 = "c"    
+
+class Item(BaseModel):
+    name: enum
+#name的值被限制在了’a‘’b‘’c‘之间
+
+
+最后总结：
+根据不同位置（URL 里、问号后、Body 里）传来的数据，我们在函数里定义参数的方式也不一样：
+1.从路由中获取数据-----路由参数
+定义时与路由中的{可变路径}同名，def def create_item(item_id:int)；@app.get("/items/{item_id}")
+可以从路由中捕获数据，用在参数中接收
+
+2.从请求体中获取数据-----请求体参数
+定义时参数声明BaseModel 子类，async def create_item(item: Item)；class Item(BaseModel):
+可以从请求体中捕获数据，并用参数接收
+
+3.从路由？后面获取数据------查询参数
+定义时声明了参数类型，但是既没有继承BaseModel子类，又没有与路由中的‘{可变路径}’同名，那么这个参数就是查询参数
+可以从路由的？后面捕获数据，并用参数接收
+--------------------------------------------------------------------------------------------------------------------------------------------------------
