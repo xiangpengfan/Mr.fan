@@ -260,73 +260,106 @@ class Item(BaseModel):
 可以从路由的？后面捕获数据，并用参数接收
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 查询参数的校验：
-筛选出我们想要的查询参数，扔掉或者拒收我们不想要的查询参数
+对查询参数进行筛选，只留下符合条件的参数
+#注意：本章的筛选主要是针对字符串进行的筛选
 
 
 实现方式
-1.方法介绍
-Annotated(数据类型，元数据对象1，元数据对象2.。。。。)
-元数据：用来描述数据的数据；
-元数据对象：把一堆元数据规则、配置打包成一个独立 Python 实例对象；就是一组描述数据
-该方法只接收一组一组的元数据，而不接收单个的元数据
-Query(筛选条件)
-Query表示该请求参数的类型为查询参数
-在Query中加入筛选条件，并将Query这个元数据对象传入Annotated达到校验的目的
+方法：
+Annotated(数据类型，元数据，元数据.......)   #Annotated的参数是元数据
+#元数据：一组筛选条件组成的集合
+Query(筛选条件)   #Query的参数的筛选条件
 
-
-2.代码实现
-@app.get("/items/")
+实现代码
+Annotated紧跟冒号放置，需要传入两个参数，数据类型和元数据，查询参数对应的元数据是Query
 async def read_items(
-    q: Annotated[str | None, Query(min_length=3, max_length=50)] = None,#这个筛选表示字符串的长度必须是3-50之间
+    q: Annotated[str | None, Query(min_length=3, max_length=50)] = None         #这个筛选表示字符串的长度必须是3-50之间
 ):
-#用Annotated包裹参数类型，给Query传入筛选条件并作为元数据传入Annotated，最终达到校验的目的
-注意：这两个方法的嵌套使用并不影响参数多类型，默认值，必填参数等的定义，这些用来描述参数特性的方式，还是按照原来的方式使用
-以下：
-q: Annotated[str | None, Query(min_length=3, max_length=50)]
-#q未声明默认值，所以q是必填参数------和原来的必填参数创建方式相同
+#Annotated和Query的组合只是加入了校验规则，这并不影响数据类型和默认值的声明规则
 
-
-3.其它参数类型
-筛选参数-----‘正则表达式’
+Query可选参数
+1.正则表达式---pattern
 q: Annotated[str | None, Query(min_length=3, pattern=‘正则表达式’)] 
-#这表示q是一个必选参数，最小值是3并且必须符合正则表达式
-#正则表达式只能形容字符串不能形容列表
+#这个并不是完全体的正则表达式，只支持字符串不支持数字、列表
 
-文档展示参数
-q: Annotated[str | None, Query(min_length=3, title="参数重命名")] 
-#这样就可以在redoc文档中看到这个参数的新名字
-#还可以在文档中加上对参数的描述，description="这是对参数的描述"，这个可以在交互文档中查看
+#Query通常情况下是筛选条件，但是也包括一些功能性参数
+2.接口美化参数----重命名title和注释description
+q: Annotated[str | None, Query(min_length=3, title="新名称"，description="这是对参数的注释")] 
+#在文本文档redoc可以看到参数的新名称，在交互文档docs中可以看到对参数的注释
 
-别名参数
-允许参数在路由中使用任意的名称
+3.别名参数----alias
 q: Annotated[str | None, Query(min_length=3, alias="一些超规的命名方式")]
-#因为在python后端中，命名变量的方式是有限的，而变量必须和路由中输入的参数同名称
-#用alias以字符串的形式来代替查询参数接收路由中对应的变量名，这大大拓展了查询参数中变量名的合规格式
+#Python 变量命名存在语法限制，不能带横杠、特殊符号、中文等
+#alise相当于给函数起了个小名，用字符串来代替函数的命名，可以拓展前端url或者请求体的参数写法
 
 
-4.Query只代表查询参数
-#所有声明容器类型的请求参数，默认从请求体中捕获数据
-#使用Annotated和Query的参数类型，即使声明了容器类型，也仍然是查询参数，即从路由？后获取数据，以下：
+
+列表类型
+#所有容器类型的请求参数，默认从请求体中捕获数据，但是搭配 Query() 强制从 URL 查询参数解析数组
 q: Annotated[list[str], Query()] = ["foo", "bar"]
-#这表示列表q是一个查询参数，并且默认值是["foo", "bar"]
+#这表示这是一个查询参数，默认值是["foo", "bar"]，Query做元数据就代表这个参数一定是查询参数
 
 
 
-自定义校验
-当Annotated[数据类型, Query()]无法完成校验时，我们需要自定义函数校验，以下：
-导入新的元数据对象，一个类
+更复杂的校验方式
+当常规的AQ无法完成筛选时，需要定义一个筛选函数，使用pydantic.AfterValidator后置校验
+步骤概述：
+导入 AfterValidator------>定义纯校验函数------->将校验函数传入 AfterValidator，作为 Annotated 的元数据,以下：
+
+from fastapi import FastAPI
+from typing import Annotated
 from pydantic import AfterValidator
 
-先定义校验函数
-def check_valid_id(id: str):
-    if not id.startswith(("isbn-", "imdb-")):    #数据前面的字符是"isbn-", "imdb-"可以通过校验
-        raise ValueError('Invalid ID format, it must start with "isbn-" or "imdb-"')
-    return id
+app = FastAPI()
 
-把校验函数传入该模块
+def check_valid_id(id_str: str) -> str:                 # 1. 自定义校验函数
+    if not id_str.startswith(("isbn-", "imdb-")):       # 自定义业务规则：ID必须以 isbn- / imdb- 开头
+        raise ValueError('ID格式错误，必须以 isbn- 或 imdb- 开头')
+    return id_str
+
 @app.get("/items/")
 async def read_items(
-    id: Annotated[str | None, AfterValidator(check_valid_id)] = None,
+    item_id: Annotated[str | None, AfterValidator(check_valid_id)] = None     # 组合校验：字符串 + 自定义后置筛选，可选参数
 ):
-#校验函数可以处理很复杂的校验
+    return {"item_id": item_id}
+#AfterValidator做元数据可以完成更加复杂的筛选
 -------------------------------------------------------------------------------------------------------------------------------------------------------
+路由参数的校验：
+对路由参数进行筛选，留下符合条件的参数
+
+
+实现方式
+方法：Annotated，Path
+#实际上Path是一个函数，每次运行返回一个Path实例
+将Path作为元数据传入Annotated，并将筛选条件传入Path，一下：
+item_id: Annotated[int, Path(title="The ID of the item to get")]
+
+
+参数排序
+如果一个python函数需要传入多个参数，那么无默认值的参数必须在前面，这是py的参数排序规则
+#ps:路由参数无法设置默认值
+强制的排序有时候并不优美，因为通常情况下，重要的参数应该排在前面
+解决这个问题的方法有两个：
+1.使用Annotated给每一个可以声明默认值的参数声明默认值
+#当大部分参数都有默认值后，参数的排序在规则下将会非常顺畅
+#事实上，fastapi中大部分时候都是使用这个排序方法
+2.使用*号，使参数变为关键词参数，以下：
+read_items(*, item_id: int = Path(title="The ID of the item to get")：
+#关键词参数采用一对一的识别模式，所以不会受到默认传参方式的任何影响
+#这在前端传参的时候必须使用，‘item_id=xxx’形式传参，会限制前端的传参方式
+#通常情况下，使用了Annotated的参数往往不需要使用*
+
+
+数值校验：
+可以传入Path或者Query等元数据的筛选条件
+gt=1：必须大于1
+ge=1：必须大于等于1
+
+lt=10：必须小于10
+le=10：必须小于等于10
+#大于和小于一般成对出现，以下：
+size: Annotated[float, Query(gt=0, lt=10.5)
+#size的值必须大于0，并且小于10.5
+length:Annotated[float, Query(ge=0, lw=10.5)
+length的值必须大于等于0，小于等于10.5
+---------------------------------------------------------------------------------------------------------------------------------
