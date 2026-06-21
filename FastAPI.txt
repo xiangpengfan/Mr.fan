@@ -402,3 +402,75 @@ model_config = {"extra": "allow"}：允许任何参数输入，并且会保留�
 
 #强边界和弱边界以后多注意实例
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
+介绍多个多个请求体参数的数据的嵌套结构
+
+请求体参数
+声明BaseModel子类类型的参数，默认是请求体参数，以下：
+class User(BaseModel):
+async def update_item(user:User|None=None):
+#user默认是请求体参数
+
+对于单个参数来说，写一个类来表示请求体参数显然很复杂，所以用常用Annotated和Body强制声明请求体参数，以下：
+async def update_item(item2:Annotated[str,Body(embed=True)]):
+#item2也是请求体参数
+
+
+
+多个请求体参数的数据结构
+请求体数据在前后端传输时是json形式，多个请求体数据的json结构是大字典里套小字典
+多请求体数据：一个路径操作函数中声明了很多个请求体参数，所有的请求体参数的数据合起来就叫多请求体数据
+
+单请求体数据
+ #以这个子类声明的请求体参数为例
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None                  
+#数据结构
+{
+        "name": "Foo",
+        "description": "The pretender",
+        "price": 42.0,
+        "tax": 3.2
+}
+#数据结构是扁平的
+
+多请求体数据
+#以这两个子类声明的请求体参数为例
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+class User(BaseModel):
+    username: str
+    full_name: str | None = None
+#数据结构
+{
+    "item": {
+        "name": "Foo",
+        "description": "The pretender",
+        "price": 42.0,
+        "tax": 3.2
+    },
+    "user": {
+        "username": "dave",
+        "full_name": "Dave Grohl"
+    }
+}
+qing#数据结构是嵌套的，是一个大字典，子类的名称为字典的键，属性为字典的值
+#这是fastapi处理多请求体数据的方法，重在了解
+
+
+
+手动生成大字典嵌套结构
+单请求体数据可以通过Annotated和Body生成嵌套结构，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+item: Annotated[Item, Body(embed=True)
+#主要用于在数据结构中统一数据格式，可以直接用处理多请求数据的方法处理单请求数据，减少前端的思维切换负担
+---------------------------------------------------------------------------------------------------------------------------------------------------------
