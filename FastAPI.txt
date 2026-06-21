@@ -472,5 +472,15 @@ class Item(BaseModel):
     price: float
     tax: float | None = None
 item: Annotated[Item, Body(embed=True)
+#embed=True单请求体数据也成了嵌套结构
 #主要用于在数据结构中统一数据格式，可以直接用处理多请求数据的方法处理单请求数据，减少前端的思维切换负担
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
+关于Field
+Field:
+Field作为元数据，和Query、Body等一样，起到筛选作用，Filed用来修饰BaseModel子类中的参数而不是操作函数中的参数，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = Field(default=None, title="The description of the item", max_length=300)  #注意这里声明默认值的手法
+    price: float = Field(gt=0, description="The price must be greater than zero")
+    tax: float | None = None
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
