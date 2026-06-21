@@ -484,3 +484,96 @@ class Item(BaseModel):
     price: float = Field(gt=0, description="The price must be greater than zero")
     tax: float | None = None
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
+写在笔记之前
+#一个新的容器类型和一个新的参数类型
+容器类型
+Set ：一个容器，内部的元素不会重复，在python中，如果你set中添加重复数据，添加的重复数据将会直接消失，不会报错，也不会生效
+参数类型
+HttpUrl类型：只能输入合法的URL形式，否则会报错
+#url开头必须是http形式------http：
+
+重要的旧知识
+BaseModel子类的属性的类型和参数类型一样，都可以声明泛型：list[str],以下：
+class one(BaseModel):
+        name=list[str]
+泛型可以声明固定的几个参数类型
+list[int,str]:这表示列表中有两个元素，一个整数，一个字符串
+class one(BaseModel):
+        name=list[int,str]
+
+
+请求体的嵌套模型
+嵌套模型是容器和BaseModel子类之间的嵌套，不同的嵌套通常可以发挥出不同的作用，以下：
+常见的嵌套模型有4种。B代指BaseModel;list代指容器；------->代指嵌套
+下面部分时候我们以学校的功能表单为例
+1.B------>B
+代码实现
+class Image(BaseModel):   #这是副表
+    url:str
+    name:str
+class Item(BaseModel):     #这是主表
+    name:str
+    image:Image|None=None    #这里一个BaseModel子类被嵌套在这个子类里面
+数据结构
+{
+  "name": "string",
+  "image": {
+    "url": "string",
+    "name": "string"
+  }
+}
+#作用：当一些信息特别重要时，单数据无法描述，就嵌套一个BaseModel子类，多维展开这个数据，这就会使数据更加的立体
+
+
+2.B------>B----->B
+代码实现
+class Image(BaseModel):   #这是二级副表
+    url:str
+    name:str
+class Item(BaseModel):     #这是副表
+    name:str
+    image:Image|None=None    #这里一个BaseModel子类被嵌套在这个子类里面
+class Offer(BaseModel):    #这是主表
+    name: str
+    items: list[Item]            #这里一个BaseModel子类被嵌套在这个子类里面
+#作用：当被嵌套的数据需要多维度描述时，就需要再次对表单的某一行进行多维展开，以下：
+#可以想象这样一个列子，学生的信息表里有一列成绩------------>展开成语文数学---------->语文这一列展开成阅读理解和作文
+
+
+3.list----------->B
+代码实现
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+async def create_multiple_images(images: list[Image])：
+#对于同一种模板表单，列表嵌套BaseModel子类可以实现大量的接收，以下：
+#如果教导处要收集每一个班级的学生资料，只需要定义一个班级的学生资料模板，用list嵌套后操作函数就可以大量接收
+
+
+4.B-------->list-------->B
+代码实现
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+class Item(BaseModel):          #这是主类
+    name: str
+    images: list[Image] | None = None
+数据结构
+{
+    "name": "Foo",
+    "images": [
+        {
+            "url": "http://example.com/baz.jpg",
+            "name": "The Foo live"
+        },
+        {
+            "url": "http://example.com/dave.jpg",
+            "name": "The Baz"
+        }
+    ]
+}
+#在收集重复表单的同时，主表还会收集一些关键性数据，以下：
+#想象教导处收集学生信息表的时候，还会收集一些关键数据：男女比例、年龄中位数、主要生源地区..........
+
+#容器和BaseModel子类的嵌套可以帮助我们完成更复杂的信息收集工作
+------------------------------------------------------------------------------------------------------------------------------------------------------------
