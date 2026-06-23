@@ -678,3 +678,23 @@ Decimal:
 Decimal（“0.1”），浮点数必须以字符串的形式传入Decimal
 在json中以float形式保存
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+请求参数cookie和header
+请求参数：从前端或者请求中获取数据的参数
+
+常见的3种请求参数：路由中的路由参数和查询参数，请求中的请求体参数
+
+另外两个请求参数：cookie和header
+
+cookie：从浏览器的cookie中获取数据的参数，由于cookie的特殊性，浏览器不会轻易允许JavaScript访问它们，所以部分时候访问不到是正常现象
+async def read_items(ads_id: Annotated[str | None, Cookie()] = None)
+#这里的元数据是Cookie，与其它元数据Path、Query、Body等生态位相同，强制声明这是一个cookie请求参数
+#从cookie中获取数据
+
+header：从请求头中获取数据，请求头中只能包含ascii字符，不包括中文和特殊字符
+async def read_items(user_agent: Annotated[str | None, Header()] = None)
+#请求头中的参数默认使用一组键值对储存，并且默认键的首字母大写，如：‘User-Agent’：‘666’；header参数可以直接读取键值后一律转为小写
+#并把连字符‘-’当作‘_’处理
+
+#当然，也可以获取原汁原味的键值，只需在Header（条件）中加入，convert_underscores=False，以下：
+strange_header: Annotated[str | None, Header(convert_underscores=False)] = None
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
