@@ -577,3 +577,76 @@ class Item(BaseModel):          #这是主类
 
 #容器和BaseModel子类的嵌套可以帮助我们完成更复杂的信息收集工作
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
+pydantic模型示例数据
+json schema就像是一个容器，存放着pydantic模型和模型示例
+模型示例就是模型说明，pydantic模型的说明
+
+
+生成模型示例的方法有三种：
+1.用变量生成，以下：
+model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 35.4,
+                    "tax": 3.2,
+                }
+            ]
+        }
+    }
+#用变量生成需要两层字典嵌套的生成模式，并用变量承接
+#model_config = {                     #用变量承接，字典嵌套
+         "json_schema_extra": {    #第一层字典嵌套，字典嵌套
+             "examples": [                #第二层字典嵌套，列表嵌套
+
+2.在Field中生成，以下：
+description: str | None = Field(default=None, examples=["A very nice Item"])
+#在Field中生成可以直接用examples生成
+
+3.在元数据Path，Query，Body等中生成，这里可以生成完整的示例数据
+item: Annotated[
+        Item,
+        Body(
+            examples=[
+                {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 35.4,
+                    "tax": 3.2,
+                }
+            ],
+        ),
+    ],
+#在Body中生成和在Field中有相似之处，都是直接用一个examples生成，也可以用更底层的json_schema_extra，这个更好用，以下：
+json_schema_extra={"example": 777}
+#区别在于Field中只能生成一个字段的示例，而参数对应的元数据可以生成一组完整的pydantic模型示例
+#这里如果换成Query是不行的，因为只有查询参数只是单个数据，而Body常常是一组数据，查询参数必须用json_schema_extra生成示例
+
+
+以上方法生成的模型示例通常情况下不允许一个模型实例对应多个pydantic模型，模型和示例通常情况下只能一对一的对应
+另一种模型生成格式可以解决这个问题---------通过openapi_examples生成，以下：
+        Body(
+            openapi_examples={
+                "normal": {       #第一个pydantic模型
+                    "summary": "A normal example",
+                    "description": "A **normal** item works correctly.",
+                    "value": {
+                        "name": "Foo",
+                        "description": "A very nice Item",
+                        "price": 35.4,
+                        "tax": 3.2,
+                    },
+                },
+                "converted": {    #第二个pydantic模型
+                    "summary": "An example with converted data",
+                    "description": "FastAPI can convert price `strings` to actual `numbers` automatically",
+                    "value": {
+                        "name": "Bar",
+                        "price": "35.4",
+                    },
+                },
+#在元数据中生成------元数据位于操作函数参数的类型声明中，在Annotated中嵌套
+#通过openapi_examples和模型名称生成一个pydantic模型的多个示例，在交互文档中可以选择不同的示例展示
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
