@@ -1,0 +1,735 @@
+数据类型
+python在定义数据时可以声明数据类型，这在fastapi中有很重要的作用
+
+定义类型只需要在变量后方加上冒号和类型名称即可，以下：
+def main(name：str)     #表示这个类型只能是字符串
+
+定义类型的关键点在于类型的种类和类型的定义方式
+特殊的定义方式：泛型和多类型union
+泛型
+在容器作为被定义的类型时，容器内部的元素可以继续声明类型，这种容器套类型的形式叫做泛型，以下：
+def main(name：list[])    #定义容器做类型  
+def main(name：list[str]) #定义容器并且规定容器内数据只能是str，就是定义泛型
+def main(name：list[int,int，str])  #这表示容器内有三个元素，分别是整数，整数，字符串的形式
+
+多类型
+一个变量可以为多类型中的任意一种，我们用多类型定义它，以下：
+def main(name：str，score：int|float)    #int|float表示score既可以是整数类型又可以是小数类型
+def main(name：str，score：int|float，a：list[]|tuple[])  #a既可以是列表又可以是元组
+类型中间加竖杠表示变量可以属于多个类型中的一种
+
+
+Pydantic:一个对数据进行过滤的模块
+过滤操作重要的点有两个：滤网和过滤方法
+滤网：把想要的数据定义在一个目标类中，并给数据附上类型
+过滤的方法：将原始数据做参数传入目标类生成一个实例
+过滤操作：
+把想要提取的数据定义成一个目标类，用目标类去过滤原始数据得到干净的目标数据，以下：
+class User(BaseModel):                #把想要是数据定义在目标类中并附上数据类型，相当于定义了一个滤网
+    id: int
+    name: str = "John Doe"
+    signup_ts: datetime | None = None
+    friends: list[int] = []
+
+external_data = {                           #原始数据
+    "id": "123",
+    "signup_ts": "2017-06-01 12:22",
+    "friends": [1, "2", b"3"],
+}
+
+user = User(**external_data)        #把数据通过滤网生成一个类的实例,这算是完成了过滤
+#该实例过滤掉了所有我们不需要的元素，并且在过滤过程中改写一些数据的类型，如:‘30’--->30;使这些数据更符合我们的需求
+--------------------------------------------------------------------------------------------------------------------------------
+环境变量：保存在计算机中，常常用来保存程序的路径或者其它配置
+
+配置：程序需要的参数，通常相对不变，并且通常不在程序中出现。以下：
+数据库的密码端口地址，用户名；这些是相对不变的，需要输入的，通常不在代码中出现的参数，叫做数据库程序的配置
+如果把我们写好的程序想象成一个精密的机器，配置文件就像是一份完整的调试说明书，机器会自动读取这份说明书
+
+环境变量实现方式
+$Env:MY_NAME = "Wade Wilson"  #在命令行中创建一个临时的环境变量
+MY_NAME="Wade Wilson" python main.py  #在python程序运行之前创建一个只针对该程序的环境变量
+
+$Env:MY_NAME       #在命令行中读取环境变量
+name = os.getenv("MY_NAME"，默认输出）   #在python中读取环境变量，若没有会输出默认值
+
+path环境变量详解
+当你在path环境变量中加入程序路径后，你在powershell中输入程序名称可以直接查找该程序的路径，并启动它
+例如，当你在终端中输入 python 时，操作系统会在该列表中的第一个目录path中查找名为 python 的程序。
+------------------------------------------------------------------------------------------------------------------------------------
+关于虚拟环境
+
+.venv\Scripts\Activate.ps1   #这样可以直接打开虚拟环境
+
+
+查看当前使用的python解释器的路径
+Get-Command python).Source   
+#不同虚拟环境带有的第三方模块不同，如果你用虚拟1的python解释器去运行虚拟2的程序，很可能出错
+#准确的查看所使用解释器是哪一个是很有必要的
+
+
+关于第三方模块的安装方式
+直接安装
+实现方式
+uv pip install 模块名
+
+先列模块清单再安装
+模块清单：包含所有模块名和模块版本的一个文本文档
+作用：先列清单再依照清单安装的方式提高了团队的协作性；同时我们在迁移项目时只需迁移清单即可，而不需要将所有的三方模块全部迁移，这大大减弱了文件的大小，加快了项目的部署
+实现方式
+先手动列清单 requirements.txt
+uv pip install -r requirements.txt    #依照清单安装模块
+
+用uv安装模块----这结合了前面两者的优点
+实现方式
+cd 项目目录      #首先进入包含虚拟环境的项目目录
+uv init                #将项目交给uv托管
+uv uv add fastapi[standard]  #uv安装模块，会自动生成项目清单文件夹pyproject.toml
+
+其它的关于虚拟环境的内容，请参考  ’你猜‘.txt  虚拟环境一章
+---------------------------------------------------------------------------------------------------------------------------------
+正式开始fastapi，准备做一个自己的网站吧
+fastapi：快速开发，快速运行，并会自动生成接口文档，以便网站调试或者开发者协作开发
+
+实现方式
+from fastapi import FastAPI
+
+app=FastAPI()     #创建命令对象
+
+@app.get(''/)        #定义路由地址和操作方式--get
+async def root():
+    return {"message": "Hello World"}
+#开发 API 时，路径是把一坨大问题划分成小问题的主要手段
+
+
+关于接口文档
+接口文档就是网站的说明书，接口文档的写作模式就叫模式，常用的模式是OpenAPI
+这个模式规定了文档必须包含的内容：接口地址，请求方式，请求头，请求参数等
+在fastapi中这些文档最终写成json的形式并输出成openapi.json文件，以下：
+http://127.0.0.1:8000/redoc：接口说明书
+http://127.0.0.1:8000/docs：在线调试文档
+
+
+关于多命令对象的选择
+当一个py文件里定义了好几个网站时，注意是网站不是网页，必须确定要启动哪一个网站。以下：
+ ##py文件
+app = FastAPI()        # 主 API
+admin_app = FastAPI()  # 后台管理 API    #两个命令对象定义了两个网站
+
+传统方式
+fastapi dev main.py --app app   #启动时必须指定具体的命令对象
+
+另一个方式
+在pyproject.toml文件加上固定配置
+[tool.fastapi]
+entrypoint = "main:app"   #永久性的实现了指定命令对象
+等价于
+fastapi dev main.py --app app
+----------------------------------------------------------------------------------------------------------------------------------
+路由：又叫路径，是浏览器访问网页的地址，定义在装饰器中，与处理函数成对出现
+
+
+
+路由分为静态路由和动态路由
+静态路由’/files/name‘：常见的访问网站的地址；动态路由’/files/{name}‘：路由不固定，name位置的参数可以传递给后端
+
+路由顺序：
+1.一个路由只能对应一个处理函数，以下：
+@app.get("/users")                      @app.get("/users")
+async def one():                            async def two():
+#访问"/users"时，只会运行第一个处理函数，第二个处理函数def two()无法被启动
+2.动态路由必须位于静态路由之下，如果相反，静态路由将无法被匹配到。以下：
+@app.get("/users/{user_id}")
+async def one(user_id: str):
+
+@app.get("/users/me")
+async def two():
+#访问"/users/me"时，路由从上到下匹配，匹配到"/users/{user_id}"满足条件将不会再往下匹配,最终只会出发def one(),def two()被def one()覆盖掉了
+#反之，访问"/users/me"时，先two后one没有任何问题
+
+
+
+预设动态路由值
+预设值需要两步：将预设值装入容器中+对路由值校验，非预设值无法传入
+标准做法：常用容器list、tuple、dict+if判断
+更优雅省时的做法：定义一个枚举类容器，并在传输处理函数时声明参数类型，以下：
+class ModelName(str, Enum):    #Enum使类变成一个枚举容器，并给容器中的每一个元素设置新的数据类型ModelName
+    alexnet = "alexnet"                 #str限制类中定义的元素只能是字符串类型
+    resnet = "resnet"
+    lenet = "lenet"           
+
+@app.get("/models/{model_name}")
+async def get_model(model_name: ModelName):   
+#只允许ModelName类型的数据输入，而ModelName类型的数据只有三个，就相当于预设了这3个数据
+
+
+
+动态路由传路径参数的方法
+因为路径和路由都是由‘/’连接而成，所以只用‘/{}’无法捕捉路径，以下：
+访问路径
+/files/code_FastAPI\awesome-project\main.py    #无法知晓哪一个是需要捕捉的路径
+
+引入捕获路径参数并传入后端的方法，在@app.get()中设置 "/files/{file_path:path}"，以下：
+/files\\code_FastAPI\awesome-project\main.py   #通过双斜杠可以很轻松的判断出传入后端的参数 code_FastAPI\awesome-project\main.py
+
+以下是完整实例：
+后端实设置
+@app.get("/files/{file_path:path}")     #采用file_path:path
+async def read_file(file_path: str):
+    return {"file_path": file_path} 
+
+浏览器访问
+/files\\code_FastAPI\awesome-project\main.py 
+
+网页返回值
+"file_path": code_FastAPI\awesome-project\main.py
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+查询参数：没有在路由路径中预先占位，而是以?key=value&...形式附加在URL末尾的可选参数。以下：
+@app.get(("/items/")     #定义时路由中未定义查询参数
+http://127.0.0.1:8000/items/?skip=0&limit=10    #查询时加载路由？后，以&连接
+
+
+查询参数：类型声明和默认值的设置
+
+声明类型
+和路由参数定义一样，查询参数也可以声明类型，包括多类型。以下：
+@app.get("/items/{item_id}")
+async def read_item(item_id: str, q: int | None = None，skip:bool=false):       #给可选参数q设置int或者None类型
+
+类型转换：字符串str和数字int可以在输入时相互转换。以下：
+http://127.0.0.1:8000/items/？q=12       #路径参数默认是str形式，函数参数只接受int形式，会在框架中做默认转换
+http://127.0.0.1:8000/items/?skip=20    #任何数值的数据除0外，都会被转换为bool值true
+
+
+设置默认值
+就像路径参数定义时一样，查询参数定义时也可以设置默认值，以下：
+@app.get("/items/")
+async def read_item(skip: int = 0, limit: int = 10):   #设置默认值后，即使在访问时未输入查询参数，函数也会以参数函数的默认值允许
+
+必选查询参数
+没有设置默认值的参数称为必选参数，访问时必须传入路由，否则会报错，以下：         #传入路由的方式可以参照本节首段
+@app.get("/items/")
+async def read_item(skip: int, limit: int):                 #在访问/items必须传入skip和limit，否则函数无法运行
+-----------------------------------------------------------------------------------------------------------------------------------------------
+请求参数----用来处理和获取请求体数据
+
+获取数据，从请求体中
+定义Basemodel子类，并在处理函数中声明该类，对应的参数会自动捕捉请求体中的同名数据，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None          #定义Basemodel子类
+
+@app.post("/items/")
+async def create_item(item: Item):    #在函数中声明它，参数item会自动捕获请求体中的同名数据
+注意：和路由参数与查询参数类似，请求体参数也可以声明类型，设置必选参数，设置默认参数，不过都是在BaseModel子类中设置
+
+
+使用数据
+和类调用属性相同，通过类.方法(),来使用捕获的数据
+@app.post("/items/")
+async def create_item(item: Item)：
+         item.name=name的值
+         item.description=description的值
+         item.price=price的值
+         item.tax=tax的值
+注意：同样是创建类，使用枚举，可以严格限制参数的可选范围，将其锁定在预先定义好的几个合法值中；使用Basemodel子类，则是可以使参数直接从前端捕获数据。这有重大区别，并且枚举类可以作为Basemodel子类的属性类型声明，限制子类属性的取值范围，以下：
+class enum(Enum):
+    str1 = "a"                 
+    str2 = "b"
+    str3 = "c"    
+
+class Item(BaseModel):
+    name: enum
+#name的值被限制在了’a‘’b‘’c‘之间
+
+
+最后总结：
+根据不同位置（URL 里、问号后、Body 里）传来的数据，我们在函数里定义参数的方式也不一样：
+1.从路由中获取数据-----路由参数
+定义时与路由中的{可变路径}同名，def def create_item(item_id:int)；@app.get("/items/{item_id}")
+可以从路由中捕获数据，用在参数中接收
+
+2.从请求体中获取数据-----请求体参数
+定义时参数声明BaseModel 子类，async def create_item(item: Item)；class Item(BaseModel):
+可以从请求体中捕获数据，并用参数接收
+
+3.从路由？后面获取数据------查询参数
+定义时声明了参数类型，但是既没有继承BaseModel子类，又没有与路由中的‘{可变路径}’同名，那么这个参数就是查询参数
+可以从路由的？后面捕获数据，并用参数接收
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+查询参数的校验：
+对查询参数进行筛选，只留下符合条件的参数
+#注意：本章的筛选主要是针对字符串进行的筛选
+
+
+实现方式
+方法：
+Annotated(数据类型，元数据，元数据.......)   #Annotated的参数是元数据
+#元数据：一组筛选条件组成的集合
+Query(筛选条件)   #Query的参数的筛选条件
+
+实现代码
+Annotated紧跟冒号放置，需要传入两个参数，数据类型和元数据，查询参数对应的元数据是Query
+async def read_items(
+    q: Annotated[str | None, Query(min_length=3, max_length=50)] = None         #这个筛选表示字符串的长度必须是3-50之间
+):
+#Annotated和Query的组合只是加入了校验规则，这并不影响数据类型和默认值的声明规则
+
+Query可选参数
+1.正则表达式---pattern
+q: Annotated[str | None, Query(min_length=3, pattern=‘正则表达式’)] 
+#这个并不是完全体的正则表达式，只支持字符串不支持数字、列表
+
+#Query通常情况下是筛选条件，但是也包括一些功能性参数
+2.接口美化参数----重命名title和注释description
+q: Annotated[str | None, Query(min_length=3, title="新名称"，description="这是对参数的注释")] 
+#在文本文档redoc可以看到参数的新名称，在交互文档docs中可以看到对参数的注释
+
+3.别名参数----alias
+q: Annotated[str | None, Query(min_length=3, alias="一些超规的命名方式")]
+#Python 变量命名存在语法限制，不能带横杠、特殊符号、中文等
+#alise相当于给函数起了个小名，用字符串来代替函数的命名，可以拓展前端url或者请求体的参数写法
+
+
+
+列表类型
+#所有容器类型的请求参数，默认从请求体中捕获数据，但是搭配 Query() 强制从 URL 查询参数解析数组
+q: Annotated[list[str], Query()] = ["foo", "bar"]
+#这表示这是一个查询参数，默认值是["foo", "bar"]，Query做元数据就代表这个参数一定是查询参数
+
+
+
+更复杂的校验方式
+当常规的AQ无法完成筛选时，需要定义一个筛选函数，使用pydantic.AfterValidator后置校验
+步骤概述：
+导入 AfterValidator------>定义纯校验函数------->将校验函数传入 AfterValidator，作为 Annotated 的元数据,以下：
+
+from fastapi import FastAPI
+from typing import Annotated
+from pydantic import AfterValidator
+
+app = FastAPI()
+
+def check_valid_id(id_str: str) -> str:                 # 1. 自定义校验函数
+    if not id_str.startswith(("isbn-", "imdb-")):       # 自定义业务规则：ID必须以 isbn- / imdb- 开头
+        raise ValueError('ID格式错误，必须以 isbn- 或 imdb- 开头')
+    return id_str
+
+@app.get("/items/")
+async def read_items(
+    item_id: Annotated[str | None, AfterValidator(check_valid_id)] = None     # 组合校验：字符串 + 自定义后置筛选，可选参数
+):
+    return {"item_id": item_id}
+#AfterValidator做元数据可以完成更加复杂的筛选
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+路由参数的校验：
+对路由参数进行筛选，留下符合条件的参数
+
+
+实现方式
+方法：Annotated，Path
+#实际上Path是一个函数，每次运行返回一个Path实例
+将Path作为元数据传入Annotated，并将筛选条件传入Path，一下：
+item_id: Annotated[int, Path(title="The ID of the item to get")]
+
+
+参数排序
+如果一个python函数需要传入多个参数，那么无默认值的参数必须在前面，这是py的参数排序规则
+#ps:路由参数无法设置默认值
+强制的排序有时候并不优美，因为通常情况下，重要的参数应该排在前面
+解决这个问题的方法有两个：
+1.使用Annotated给每一个可以声明默认值的参数声明默认值
+#当大部分参数都有默认值后，参数的排序在规则下将会非常顺畅
+#事实上，fastapi中大部分时候都是使用这个排序方法
+2.使用*号，使参数变为关键词参数，以下：
+read_items(*, item_id: int = Path(title="The ID of the item to get")：
+#关键词参数采用一对一的识别模式，所以不会受到默认传参方式的任何影响
+#这在前端传参的时候必须使用，‘item_id=xxx’形式传参，会限制前端的传参方式
+#通常情况下，使用了Annotated的参数往往不需要使用*
+
+
+数值校验：
+可以传入Path或者Query等元数据的筛选条件
+gt=1：必须大于1
+ge=1：必须大于等于1
+
+lt=10：必须小于10
+le=10：必须小于等于10
+#大于和小于一般成对出现，以下：
+size: Annotated[float, Query(gt=0, lt=10.5)
+#size的值必须大于0，并且小于10.5
+length:Annotated[float, Query(ge=0, lw=10.5)
+length的值必须大于等于0，小于等于10.5
+---------------------------------------------------------------------------------------------------------------------------------
+查询参数的模型
+参数模型：
+用BaseModel子类设计的参数模板
+
+实现方式
+设计一个参数模板，然后在参数中用Annotated和Query声明它，以下：
+class FilterParams(BaseModel):
+          limit: int = Field(100, gt=0, le=100)
+          offset: int = Field(0, ge=0)                      #设计一个模板
+
+def read_items(filter_query: Annotated[FilterParams, Query()]):  #在函数中声明它
+
+模板中的常用的方法
+Field：对参数做筛选
+#对想要筛选的参数使用
+#单个参数，在元数据Query中增加筛选条件，参数模板需要在Field()中增加筛选条件
+
+literal：literal：限制变量的值只能是指定的几个字面量之一
+#在实际应用中，和Enum作用有所重叠
+
+
+BaseModel子类和Enum的子类的区别
+Enum是限制的固定的几个值，而BaseModel限制的是参数和类型约束
+在实际应用中
+BaseModel就像一个具有完整表头的模板，Enum像是它的一列或者一列中的一部分具体内容
+#Enum可以跨类型设置固定值，但我们通常不这么做
+
+
+禁止命令
+对整个类使用，设置边界的严格性
+默认---无命令：允许额外的参数输入，但只会保留模板参数
+model_config = {"extra": "forbid"}：不允许额外的参数输入，一旦检测到非模板参数就会报错
+model_config = {"extra": "allow"}：允许任何参数输入，并且会保留任何参数
+#强边界设置可以及时提醒开发者，防止发生更大的错误，以保证数据和资产安全，以下：
+#前端测试时用户账号密码不严格输入会立刻报错，在开发阶段发现错误，就可以避免应用上线后造成更大的损失
+#弱边界给与用户更高的自由度，同时方便后续的调试和维护
+
+#强边界和弱边界以后多注意实例
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+介绍多个多个请求体参数的数据的嵌套结构
+
+请求体参数
+声明BaseModel子类类型的参数，默认是请求体参数，以下：
+class User(BaseModel):
+async def update_item(user:User|None=None):
+#user默认是请求体参数
+
+对于单个参数来说，写一个类来表示请求体参数显然很复杂，所以用常用Annotated和Body强制声明请求体参数，以下：
+async def update_item(item2:Annotated[str,Body(embed=True)]):
+#item2也是请求体参数
+
+
+
+多个请求体参数的数据结构
+请求体数据在前后端传输时是json形式，多个请求体数据的json结构是大字典里套小字典
+多请求体数据：一个路径操作函数中声明了很多个请求体参数，所有的请求体参数的数据合起来就叫多请求体数据
+
+单请求体数据
+ #以这个子类声明的请求体参数为例
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None                  
+#数据结构
+{
+        "name": "Foo",
+        "description": "The pretender",
+        "price": 42.0,
+        "tax": 3.2
+}
+#数据结构是扁平的
+
+多请求体数据
+#以这两个子类声明的请求体参数为例
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+class User(BaseModel):
+    username: str
+    full_name: str | None = None
+#数据结构
+{
+    "item": {
+        "name": "Foo",
+        "description": "The pretender",
+        "price": 42.0,
+        "tax": 3.2
+    },
+    "user": {
+        "username": "dave",
+        "full_name": "Dave Grohl"
+    }
+}
+qing#数据结构是嵌套的，是一个大字典，子类的名称为字典的键，属性为字典的值
+#这是fastapi处理多请求体数据的方法，重在了解
+
+
+
+手动生成大字典嵌套结构
+单请求体数据可以通过Annotated和Body生成嵌套结构，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+item: Annotated[Item, Body(embed=True)
+#embed=True单请求体数据也成了嵌套结构
+#主要用于在数据结构中统一数据格式，可以直接用处理多请求数据的方法处理单请求数据，减少前端的思维切换负担
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+关于Field
+Field:
+Field作为元数据，和Query、Body等一样，起到筛选作用，Filed用来修饰BaseModel子类中的参数而不是操作函数中的参数，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = Field(default=None, title="The description of the item", max_length=300)  #注意这里声明默认值的手法
+    price: float = Field(gt=0, description="The price must be greater than zero")
+    tax: float | None = None
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+写在笔记之前
+#一个新的容器类型和一个新的参数类型
+容器类型
+Set ：一个容器，内部的元素不会重复，在python中，如果你set中添加重复数据，添加的重复数据将会直接消失，不会报错，也不会生效
+参数类型
+HttpUrl类型：只能输入合法的URL形式，否则会报错
+#url开头必须是http形式------http：
+
+重要的旧知识
+BaseModel子类的属性的类型和参数类型一样，都可以声明泛型：list[str],以下：
+class one(BaseModel):
+        name=list[str]
+泛型可以声明固定的几个参数类型
+list[int,str]:这表示列表中有两个元素，一个整数，一个字符串
+class one(BaseModel):
+        name=list[int,str]
+
+
+请求体的嵌套模型
+嵌套模型是容器和BaseModel子类之间的嵌套，不同的嵌套通常可以发挥出不同的作用，以下：
+常见的嵌套模型有4种。B代指BaseModel;list代指容器；------->代指嵌套
+下面部分时候我们以学校的功能表单为例
+1.B------>B
+代码实现
+class Image(BaseModel):   #这是副表
+    url:str
+    name:str
+class Item(BaseModel):     #这是主表
+    name:str
+    image:Image|None=None    #这里一个BaseModel子类被嵌套在这个子类里面
+数据结构
+{
+  "name": "string",
+  "image": {
+    "url": "string",
+    "name": "string"
+  }
+}
+#作用：当一些信息特别重要时，单数据无法描述，就嵌套一个BaseModel子类，多维展开这个数据，这就会使数据更加的立体
+
+
+2.B------>B----->B
+代码实现
+class Image(BaseModel):   #这是二级副表
+    url:str
+    name:str
+class Item(BaseModel):     #这是副表
+    name:str
+    image:Image|None=None    #这里一个BaseModel子类被嵌套在这个子类里面
+class Offer(BaseModel):    #这是主表
+    name: str
+    items: list[Item]            #这里一个BaseModel子类被嵌套在这个子类里面
+#作用：当被嵌套的数据需要多维度描述时，就需要再次对表单的某一行进行多维展开，以下：
+#可以想象这样一个列子，学生的信息表里有一列成绩------------>展开成语文数学---------->语文这一列展开成阅读理解和作文
+
+
+3.list----------->B
+代码实现
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+async def create_multiple_images(images: list[Image])：
+#对于同一种模板表单，列表嵌套BaseModel子类可以实现大量的接收，以下：
+#如果教导处要收集每一个班级的学生资料，只需要定义一个班级的学生资料模板，用list嵌套后操作函数就可以大量接收
+
+
+4.B-------->list-------->B
+代码实现
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+class Item(BaseModel):          #这是主类
+    name: str
+    images: list[Image] | None = None
+数据结构
+{
+    "name": "Foo",
+    "images": [
+        {
+            "url": "http://example.com/baz.jpg",
+            "name": "The Foo live"
+        },
+        {
+            "url": "http://example.com/dave.jpg",
+            "name": "The Baz"
+        }
+    ]
+}
+#在收集重复表单的同时，主表还会收集一些关键性数据，以下：
+#想象教导处收集学生信息表的时候，还会收集一些关键数据：男女比例、年龄中位数、主要生源地区..........
+
+#容器和BaseModel子类的嵌套可以帮助我们完成更复杂的信息收集工作
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+pydantic模型示例数据
+json schema就像是一个容器，存放着pydantic模型和模型示例
+模型示例就是模型说明，pydantic模型的说明
+
+
+生成模型示例的方法有三种：
+1.用变量生成，以下：
+model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 35.4,
+                    "tax": 3.2,
+                }
+            ]
+        }
+    }
+#用变量生成需要两层字典嵌套的生成模式，并用变量承接
+#model_config = {                     #用变量承接，字典嵌套
+         "json_schema_extra": {    #第一层字典嵌套，字典嵌套
+             "examples": [                #第二层字典嵌套，列表嵌套
+
+2.在Field中生成，以下：
+description: str | None = Field(default=None, examples=["A very nice Item"])
+#在Field中生成可以直接用examples生成
+
+3.在元数据Path，Query，Body等中生成，这里可以生成完整的示例数据
+item: Annotated[
+        Item,
+        Body(
+            examples=[
+                {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 35.4,
+                    "tax": 3.2,
+                }
+            ],
+        ),
+    ],
+#在Body中生成和在Field中有相似之处，都是直接用一个examples生成，也可以用更底层的json_schema_extra，这个更好用，以下：
+json_schema_extra={"example": 777}
+#区别在于Field中只能生成一个字段的示例，而参数对应的元数据可以生成一组完整的pydantic模型示例
+#这里如果换成Query是不行的，因为只有查询参数只是单个数据，而Body常常是一组数据，查询参数必须用json_schema_extra生成示例
+
+
+以上方法生成的模型示例通常情况下不允许一个模型实例对应多个pydantic模型，模型和示例通常情况下只能一对一的对应
+另一种模型生成格式可以解决这个问题---------通过openapi_examples生成，以下：
+        Body(
+            openapi_examples={
+                "normal": {       #第一个pydantic模型
+                    "summary": "A normal example",
+                    "description": "A **normal** item works correctly.",
+                    "value": {
+                        "name": "Foo",
+                        "description": "A very nice Item",
+                        "price": 35.4,
+                        "tax": 3.2,
+                    },
+                },
+                "converted": {    #第二个pydantic模型
+                    "summary": "An example with converted data",
+                    "description": "FastAPI can convert price `strings` to actual `numbers` automatically",
+                    "value": {
+                        "name": "Bar",
+                        "price": "35.4",
+                    },
+                },
+#在元数据中生成------元数据位于操作函数参数的类型声明中，在Annotated中嵌套
+#通过openapi_examples和模型名称生成一个pydantic模型的多个示例，在交互文档中可以选择不同的示例展示
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+一些其它的数据类型
+UUID映射:
+#会把任意传入的字符串或者数字映射成128位的数字，也可以把128位数字转换成任意字符串，是一个可逆的映射
+#常用在数据库表单主键中
+
+
+常见的时间格式
+datetime.datetime:
+#年月日时分秒，在json中以字符串保存
+datetime.date:
+#年月日，在json中以字符串保存
+datetime.time:
+#时分秒，在json字符串中以字符串保存
+datetime.timedelta:
+#时间差距：现有时间上的时间运算
+在json中以浮点数保存
+
+
+其它格式
+frozenset:
+#无法增删改查的set集合，在json中以list形式保存
+bytes:
+#二进制格式，在json文件中以字符串形式保存
+Decimal:
+#更精确的浮点数，浮点数套上Decimal使用，以下：
+Decimal（“0.1”），浮点数必须以字符串的形式传入Decimal
+在json中以float形式保存
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+请求参数cookie和header
+请求参数：从前端或者请求中获取数据的参数
+
+常见的3种请求参数：路由中的路由参数和查询参数，请求中的请求体参数
+
+另外两个请求参数：cookie和header
+
+cookie：从浏览器的cookie中获取数据的参数，由于cookie的特殊性，浏览器不会轻易允许JavaScript访问它们，所以部分时候访问不到是正常现象-------Error: Unprocessable Content，以下：
+async def read_items(ads_id: Annotated[str | None, Cookie()] = None)
+#这里的元数据是Cookie，与其它元数据Path、Query、Body等生态位相同，强制声明这是一个cookie请求参数
+#从cookie中获取数据
+
+header：从请求头中获取数据，请求头中只能包含ascii字符，不包括中文和特殊字符
+async def read_items(user_agent: Annotated[str | None, Header()] = None)
+#请求头中的参数默认使用一组键值对储存，并且默认键的首字母大写，如：‘User-Agent’：‘666’；header参数可以直接读取键值后一律转为小写
+#并把连字符‘-’当作‘_’处理
+
+#当然，也可以获取原汁原味的键值，只需在Header（条件）中加入，convert_underscores=False，以下：
+strange_header: Annotated[str | None, Header(convert_underscores=False)] = None
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+cookie和header参数模型
+cookie参数模型：在cookie做请求参数时，用pydantic模型/BaseModel子类做其参数类型，以下：
+class Cookies(BaseModel):
+    session_id: str
+    fatebook_tracker: str | None = None
+    googall_tracker: str | None = None
+
+@app.get("/items/")
+async def read_items(cookies: Annotated[Cookies, Cookie()]):
+    return cookies
+
+#cookie参数模型也可以在参数子类中申请强边界和弱边界
+class Cookies(BaseModel):
+           model_config = {"extra": "forbid"}    #输入不在属性范围内的数据直接报错
+class Cookies(BaseModel):
+           model_config = {"extra": "allow"}     #任何数据都可以输入该参数并得到保留
+
+
+
+header参数模型：在header做请求参数时，用pydantic模型/BaseModel子类做其参数类型，以下：
+class CommonHeaders(BaseModel):
+    host: str
+    save_data: bool
+    if_modified_since: str | None = None
+    traceparent: str | None = None
+    x_tag: list[str] = []
+
+
+@app.get("/items/")
+async def read_items(headers: Annotated[CommonHeaders, Header()]):
+    return headers
+#header参数模型也可以在参数子类中申请强边界和弱边界，详情请参考cookie
+#header模型还带了一些header元数据的特性：
+#header元数据会自动将收到的数据全部转为小写，并且‘连字符-’转换为‘_’然后和模型属性进行匹配
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
