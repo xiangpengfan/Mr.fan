@@ -685,7 +685,7 @@ Decimal（“0.1”），浮点数必须以字符串的形式传入Decimal
 
 另外两个请求参数：cookie和header
 
-cookie：从浏览器的cookie中获取数据的参数，由于cookie的特殊性，浏览器不会轻易允许JavaScript访问它们，所以部分时候访问不到是正常现象
+cookie：从浏览器的cookie中获取数据的参数，由于cookie的特殊性，浏览器不会轻易允许JavaScript访问它们，所以部分时候访问不到是正常现象-------Error: Unprocessable Content，以下：
 async def read_items(ads_id: Annotated[str | None, Cookie()] = None)
 #这里的元数据是Cookie，与其它元数据Path、Query、Body等生态位相同，强制声明这是一个cookie请求参数
 #从cookie中获取数据
@@ -698,3 +698,38 @@ async def read_items(user_agent: Annotated[str | None, Header()] = None)
 #当然，也可以获取原汁原味的键值，只需在Header（条件）中加入，convert_underscores=False，以下：
 strange_header: Annotated[str | None, Header(convert_underscores=False)] = None
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+cookie和header参数模型
+cookie参数模型：在cookie做请求参数时，用pydantic模型/BaseModel子类做其参数类型，以下：
+class Cookies(BaseModel):
+    session_id: str
+    fatebook_tracker: str | None = None
+    googall_tracker: str | None = None
+
+@app.get("/items/")
+async def read_items(cookies: Annotated[Cookies, Cookie()]):
+    return cookies
+
+#cookie参数模型也可以在参数子类中申请强边界和弱边界
+class Cookies(BaseModel):
+           model_config = {"extra": "forbid"}    #输入不在属性范围内的数据直接报错
+class Cookies(BaseModel):
+           model_config = {"extra": "allow"}     #任何数据都可以输入该参数并得到保留
+
+
+
+header参数模型：在header做请求参数时，用pydantic模型/BaseModel子类做其参数类型，以下：
+class CommonHeaders(BaseModel):
+    host: str
+    save_data: bool
+    if_modified_since: str | None = None
+    traceparent: str | None = None
+    x_tag: list[str] = []
+
+
+@app.get("/items/")
+async def read_items(headers: Annotated[CommonHeaders, Header()]):
+    return headers
+#header参数模型也可以在参数子类中申请强边界和弱边界，详情请参考cookie
+#header模型还带了一些header元数据的特性：
+#header元数据会自动将收到的数据全部转为小写，并且‘连字符-’转换为‘_’然后和模型属性进行匹配
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
