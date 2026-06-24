@@ -596,8 +596,9 @@ model_config = {
             ]
         }
     }
-#用变量生成需要两层字典嵌套的生成模式，并用变量承接
-#model_config = {                     #用变量承接，字典嵌套
+#这个一定要放在BaseModel子类里面
+#用变量生成需要三层字典嵌套的生成模式，并用变量承接
+#model_config = {                     #用变量承接，字典嵌套，这个变量名是固定的
          "json_schema_extra": {    #第一层字典嵌套，字典嵌套
              "examples": [                #第二层字典嵌套，列表嵌套
 
@@ -733,3 +734,90 @@ async def read_items(headers: Annotated[CommonHeaders, Header()]):
 #header模型还带了一些header元数据的特性：
 #header元数据会自动将收到的数据全部转为小写，并且‘连字符-’转换为‘_’然后和模型属性进行匹配
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+响应模型----返回值需要经过该模型筛选
+响应模型：做一张滤网，过滤掉哪些不应该被输出的数据，并限制输出数据的类型，
+第一种传入响应模型的方法是创立返回值类型注解，以下：
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+    tags: list[str] = []
+
+@app.post('/items/')
+async def create_item(item:Item)->Item:       #这里创建类型注解
+    return item
+# ->Item必须和return的返回值类型相同
+#Item在输出时会经过BaseModel子类的过滤
+
+
+另一种传入响应模型的做法，路由参数response_model
+@app.post('/items/'，response_model=Item)    #这里设置输入响应参数
+async def create_item(item:Item)->Any:       
+    return item
+#’response_model=Item‘设置完成后会直接传入fastapi框架，作为结果筛选和类型限制的参数
+#事实上，类型注解’->Any‘的底层也是fastapi框架翻译成’response_model=Item‘来实现的
+#像上诉代码中那样，如果类型注解和响应参数同时存在，框架只会采取响应参数中的模型
+此时的类型注解更像是程序内部的注释，对外展示和实际采用的模型都是response_model模型
+
+
+
+一个特殊的类型注解-----reponse
+reponse作为类型注解使用，允许我们不通过框架从零开始自定义响应对象，以下：
+from fastapi import Response
+async def get_portal(teleport: bool = False) -> Response:
+    if teleport:
+        return RedirectResponse(url="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    return JSONResponse(content={"message": "Here's your interdimensional portal."})
+#另外，如果只是想把类型注解当做注释使用，在路由中输入响应参数response_model=None，以下：
+@app.get("/portal", response_model=None)
+#此时类型注解将不会被fastapi翻译，而只是作为一个注释使用
+
+
+
+一些常用的响应参数
+(1)response_model_exclude_unset=True：在响应模型中，只会输出赋值的类属性，未赋值的类属性即使有默认值也不会输出，以下：
+@app.get("/items/{item_id}", response_model=Item, response_model_exclude_unset=True)
+
+fatstapi允许我们进行部分筛选而不是整体过滤，依靠以下两个参数实现
+(2)response_model_include['属性1','属性2']：只留自己想要的类属性，以下：
+@app.get('/items/{item_id}',response_model=Item,response_model_include={'name',"price"})
+
+(3)response_model_exclude['属性1','属性2'......]：排除自己不想要的类属性，以下：
+@app.get('/items/{item_id}',response_model=Item,response_model_exclude={'name',"price"})
+
+(4)response_model=None:respons_model原来用来声明模板，这里的None表示不使用任何模板，类型注解也只作为注释或者是提示词使用，以下：
+@app.get("/portal", response_model=None)
+#该值常常和Response类型注解配合使用，用来手动构建请求
+
+
+
+常见的模型结构：主模型(数据源模型)和输出模型
+在实际工程开发中，经常会出现一个模型包含另一个模型全部或部分字段的情况，以下：
+class BaseModelUser(BaseModel):   #这是数据源模型
+     username:str
+     password:str
+     email:EmailStr
+     full_name:str|None=None
+
+class UserOut(BaseModel):      #这是输出模型
+     username:str
+     email:EmailStr
+     full_name:str|None=None
+
+#这样做的作用主要有两个
+1.实现内部逻辑与外部接口区分-----避免客户端收到额外字段
+数据源模型可能会随着业务发展不断增加字段，例如：
+class UserModel(BaseModel):
+    username: str
+    password: str
+    email: EmailStr
+    full_name: str | None = None
+    create_time: datetime             #这是增加的字段
+如果接口直接返回数据源模型，客户端可能会收到额外字段。
+而使用 UserOut 后：
+@app.get("/users/{id}", response_model=UserOut)
+无论内部模型如何变化，接口返回结构都保持稳定，这样可以避免内部修改影响外部调用者。
+2.保护隐私
+密码、密匙、加密的盐等不能直接返回给用户，所以如果一个pydantic模型包含这些信息，就需要把这些信息拿掉再定义一个模型------数据源模型和输出模型，以防数据的泄露
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
