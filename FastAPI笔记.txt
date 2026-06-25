@@ -821,3 +821,77 @@ class UserModel(BaseModel):
 2.保护隐私
 密码、密匙、加密的盐等不能直接返回给用户，所以如果一个pydantic模型包含这些信息，就需要把这些信息拿掉再定义一个模型------数据源模型和输出模型，以防数据的泄露
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
+以下是一个例子,模拟真实应用中,多个pydantic模型中互相协作的场景
+
+1.解析多个模型的结构的协作运行-----以数据库保存用户名为例
+创建3个模型
+输入模型:包含密码
+输出模型:不包含密码
+数据库模型:包含密码,并且是哈希后的密码,以下:
+class UserIn(BaseModel):
+    username: str
+    password: str
+    email: EmailStr
+    full_name: str | None = None
+class UserOut(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+class UserInDB(BaseModel):
+    username: str
+    hashed_password: str
+    email: EmailStr
+    full_name: str | None = None
+
+(1).在操作函数中调用主函数
+user_saved=fake_save_password(user)
+(2).在主函数中调用副函数提取密码,副函数给密码加盐后返回
+在主函数中调用
+hash_password=fake_password_hasher(user_in.password)
+副函数加盐后返回
+return "salt"+raw_password
+(3).将处理后的密码统一格式并保存到数据库
+统一格式
+user_in_db=UserInDB(**user_in.dict(),hashed_password=hash_password)
+这里暂时模拟保存到数据库
+print(f'密码处理后的数据在这里保存到数据库，处理后的密码{hash_password}')
+(4).并返回最终数据,最终数据通过响应模型过滤后输出
+return user_in_db
+
+注意,在(3)中:
+#**：调用时是解包的意思，把字典拆解成关键字参数传递给函数；定义时是打包的意思，把传入的关键字打包成字典使用
+#模型实例.dict()：pydantic模型的一个方法，将pydantic模型的所有属性输出成一个字典，等同于   模型实例.model_dump()
+
+对定义模型进行优化
+减少重复代码,再定义一个模型抽象出相同的内容,以下:
+class UserBase(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+class UserIn(UserBase):
+    password: str
+class UserOut(UserBase):
+    pass
+class UserInDB(UserBase):
+    hashed_password: str
+#靠一个公共模型来减少重复代码
+#这样做有两个作用,1.使代码结构更加清晰  2.减少代码重复导致的bug、安全问题、代码失步等问题
+
+
+
+2.操作函数可以生成联合响应模型
+创建两个模型:模型1,模型2
+@app.get("/items/{item_id}", response_model=模型1 | 模型2)
+#操作函数返回的内容满足模型1和模型2都可以输出
+
+
+3.操作函数可以生成泛型类型的响应模型
+@app.get("/items/", response_model=list[Item])
+#声明泛型类型的操作函数可以接收多组Item对象
+
+
+4.操作函数可以生成dict类型的响应模型
+@app.get("/keyword-weights/", response_model=dict[str, float])
+#字典类型的响应模型可以拦截非字典形式的返回数据
+#并且，可以设置键值的形式
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
