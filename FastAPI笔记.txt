@@ -963,3 +963,69 @@ Content-Type: application/json                    ← JSON格式
 Content-Type: multipart/form-data                 ← 文件上传格式
 所以不能混合接收
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+文件请求参数和参数的文件类型
+传输文件通常有两种方法：使用 File() 创建文件参数，以及声明 UploadFile 类型
+
+1.使用 File()创建文件参数
+File()是一种元数据，生态位和其它元数据Query、Body、Cookie、Path相同
+实现方式
+async def create_file(file:Annotated[bytes,File()]):
+#因为File接收到的是纯字节数据（bytes），可以直接写入磁盘：
+with open("目标文件夹", "wb") as f:
+        f.write(file)
+
+2.声明UploadFile类型
+文件类型UploadFile是一种数据类型，生态位等价于str，int，float等
+实现方式
+async def create_upload_file(file:UploadFile):
+
+#相对于File生成文件参数来说，UploadFile可以传送更大的文件并且UploadFile传输的文件可以保存更多的信息，以下
+#UploadFile 实例包含的属性：
+filename文件名、content_type：内容类型（MIME 类型 / 媒体类型）和file文件数据因为接#收到的不是单纯的 bytes，所以需要先读取再写入，以下：
+contents = await myfile.read()
+with open("目标文件夹", "wb") as f:
+        f.write(contents)
+
+
+
+文件参数元数据的配置
+文件参数设置默认值
+async def create_file(file:Annotated[bytes|None,File()]=None):
+async def create_upload_file(file:UploadFile|None=None):
+注意：文件参数即使设置了默认值，操作函数引用时找不到也会报错，所以最好加个筛选
+if not file:
+        return {'文件名称':None,'文件长度':None}
+
+
+文件参数的泛型，以下：
+async def create_file(file:Annotated[list[bytes],File(...,description='这是一个文件参数')]):
+async def create_upload_file(file:Annotated[list[UploadFile],File(...,description='这是一个文件参数')]):
+#注意，我们可以声明一个文件泛型来接收多个文件，但交互文档无法渲染他们
+
+
+文件参数添加筛选条件和描述信息
+async def create_file(file: Annotated[bytes, File(description="A file read as bytes")]):
+async def create_upload_file(
+    file: Annotated[UploadFile, File(description="A file read as UploadFile")],
+):
+
+
+
+UploadFile详解
+#UploadFile 内部使用 SpooledTemporaryFile模块：
+#小文件存在内存中
+#大文件自动写入磁盘临时文件
+#因此不会像 bytes 那样把整个文件一次性加载到内存，所以可以加载更大的内容
+
+#write 写入的是 UploadFile 内部的临时文件对象（内存或磁盘临时文件），不是最终存储位置。
+#一般情况下我们不需要手动调用它，读取文件时数据自然会进入内部缓冲区。
+
+只有在需要修改文件内容后再保存时才用：
+python
+modified_content = ...              # 修改后的内容
+await file.seek(0)                  # 回到开头
+await file.write(modified_content)  # 写入内部临时文件
+await file.seek(0)                  # 再回到开头
+content = await file.read()         # 读取修改后的内容
+#这种用法在实际业务中极少见。
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
