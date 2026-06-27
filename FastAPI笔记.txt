@@ -1043,3 +1043,57 @@ async def create_file(
 
 #我们可以同时接收表单数据和文件
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+装饰器参数------交互文档中声明信息
+路径装饰器中传入参数用来给路径增添以下信息：
+状态码
+@app.post("/items/", status_code=status.HTTP_201_CREATED)
+#可以获得编辑器补全
+
+
+标签
+@app.post("/items/", tags=["items"])
+#装饰器声明该信息后，交互文档中，路径带有items标签
+可以把标签归到一个类中，统一管理
+class Tags(Enum):
+    items = "items"
+    users = "users"
+@app.get("/items/", tags=[Tags.items])
+@app.get("/users/", tags=[Tags.users])
+
+
+摘要和描述
+@app.post(
+    "/items/",
+    summary="Create an item",
+    description="Create an item with all the information, name, description, price, tax and a set of unique tags",
+)
+#装饰器添加该信息后，交互文档带有描述和摘要信息
+长的描述
+长的描述可以在操作函数中以前言的形式声明
+async def create_item(item: Item) -> Item:
+    """
+    Create an item with all the information:
+
+    - **name**: each item must have a name
+    - **description**: a long description
+    - **price**: required
+    - **tax**: if the item doesn't have tax, you can omit this
+    - **tags**: a set of unique tag strings for this item
+    """
+    return item
+
+
+ 
+响应描述
+@app.post(
+    "/items/",
+    response_description="The created item",
+)
+#添加该信息后，交互文档下方的示例会带有描述信息
+
+
+标记弃用
+@app.get("/elements/", tags=["items"], deprecated=True)
+#标记后路径不会立刻消失，会整体呈现惨白色，并有Warning: Deprecated字样
+#开发者希望用户可以寻找替代方案并给予用户提前通知
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
