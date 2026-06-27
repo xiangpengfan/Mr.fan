@@ -1097,3 +1097,40 @@ async def create_item(item: Item) -> Item:
 #标记后路径不会立刻消失，会整体呈现惨白色，并有Warning: Deprecated字样
 #开发者希望用户可以寻找替代方案并给予用户提前通知
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
+更新数据PUT和PATCH
+更新数据分为两种，完全替换更新PUT和替换一部分更新PATCH
+
+put更新全部数据
+传入两个参数一个用来查找初始数据，第二个是新内容，用来替换原来的内容
+实现方式
+async def update_item(item_id: str, item: Item) -> Item:
+    pdate_item_encoded = jsonable_encoder(item)   #把新内容转换成json格式
+    items[item_id] = update_item_encoded         #替换原来的内容
+    return updated_item
+#jsonable_encoder可以把任意数据转化成json数据
+#jsonable_encoder方法：将各种复杂的 Python 对象（比如 Pydantic 模型、datetime 对象等），转换成 JSON 格式存储的数据
+
+patch更新部分数据
+传入两个参数一个用来查找初始数据，第二个是新内容，用来替换原来内容中的部分内容
+实现方式
+async def update_item(item_id: str, item: Item) -> Item:
+    stored_item_data = items[item_id]
+    stored_item_model = Item(**stored_item_data)                #创建初始数据模型-----给从字典拿出来的初始数据创建模型
+    update_data = item.model_dump(exclude_unset=True)    #打散传入的模型--------使用户传入的pydantic模型变为json形式
+    #exclude_unset=True：排除掉默认字段，只保留用户输入的内容
+    updated_item = stored_item_model.model_copy(update=update_data)     #用打散出的字典覆盖掉初始数据模型的部分字段，生成最终模型
+    items[item_id] = jsonable_encoder(updated_item)            #将最终模型转变为json格式，赋值给原字典
+    return updated_item
+
+#.model_dump(exclude_unset=True)：把pydantic模型转换成json形式，并排除掉pydantic模型的默认值
+#.model_copy(update=update_data)：基于已存储的旧数据，创建新模型实例，并用 update_data 覆盖指定字段。
+
+
+
+put和post、get的划分取决于hettp协议，主要作用在两方面
+1.统一接口，方便团队协作
+2.融入hettp的生态，可以和编辑器、底层模板识别、交互文档等配合使用
+#协议：最开始只是为了对接方便，加强沟通；使用的人多了之后就会形成生态
+#自己或小团队内部写无所谓，但是如果想要融入生态，就必须按照协议来写代码，协议没有强制性，但是生态有
+#可以这样理解生态：在中国的人最好尊重中国的习俗和文化，不遵守协议也可以，但是会处处碰壁，除非你或者你的团队不与人交流
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
