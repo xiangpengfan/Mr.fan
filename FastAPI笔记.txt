@@ -1238,3 +1238,28 @@ async def read_items(commons:commons):
 1.可以快速对应相应的路由------进行不同路由的权限管理
 2.可以很方便的抽象出这两个依赖的父类active_user，父类还可以抽象出父类的父类current_user
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+类作为依赖项
+类是可调用对象，所以类也可以作为依赖项传入操作函数中
+
+实现方法
+class Item:
+    def __init__(self,q:str|None=None,skip:int=0,limit:int=10):
+        self.q=q
+        self.skip=skip
+        self.limit=limit
+Item_depend=Annotated[Item,Depends()]
+
+@app.get('/item/')
+async def read_items(item:Item_depend):
+#类传入操作函数后，返回值就是类的实例，因此，返回值可以调用类的属性和方法
+
+
+
+类传入操作函数的传统写法
+commons: Annotated[依赖类, Depends(依赖类)]
+#第一个 CommonQueryParams 仅用作类型注解，真正将参数标记为依赖项的是 Depends(依赖类)，并且Depends(依赖类)也声明了参数类型
+#python追求极致的优雅，所以它可以更加简洁
+
+fastapi提供了一种简便的写法
+commons: Annotated[依赖类, Depends()]
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
