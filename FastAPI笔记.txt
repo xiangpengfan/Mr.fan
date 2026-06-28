@@ -1271,7 +1271,7 @@ commons: Annotated[依赖类, Depends()]
 def little_query(q:str|None=None):
     return q
 创建个子依赖项
-def big_query(q:Annotated[str|None,Depends(little_query)],
+def big_query(q:Annotated[str|None,Depends(little_query)],     #子依赖项引用父依赖项
               last_query:Annotated[str|None,Cookie()]
               ):
 引用子依赖项
@@ -1279,3 +1279,18 @@ async def read_items(query:Annotated[big_query,Depends()]):
     return {'query':query}
 #对子依赖项重复值的高级抽象可以帮助我们节省很多的代码量
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+路径装饰器的依赖项------无返回值的依赖项
+路径装饰器依赖项：没有返回值的依赖项
+这些依赖项常用在权限校验、记录日志与审计、 数据库事务的开启与提交等只有动作没有结果的事情上
+
+实现方式
+下面以极简的权限校验为例
+创建依赖项
+async def verify_token(X_token:Annotated[str,Header()]):
+    if X_token != 'fake-super-secret-token':
+        raise HTTPException(status_code=400,detail='X-token 错啦！')
+
+用dependencies导入操作函数
+@app.get('/items/',dependencies=[Depends(verify_token),Depends(verify_key)])
+#即使创建的依赖项有返回值也不会被返回，所以有时可以复用之前创建的依赖项
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
