@@ -1098,32 +1098,34 @@ async def create_item(item: Item) -> Item:
 #开发者希望用户可以寻找替代方案并给予用户提前通知
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 更新数据PUT和PATCH
-更新数据分为两种，完全替换更新PUT和替换一部分更新PATCH
+更新数据分为两种，
+PUT 全量更新：用新数据，整个替换掉旧数据
+ PATCH 部分更新：只修改指定的字段，其余字段保持不变。
 
-put更新全部数据
-传入两个参数一个用来查找初始数据，第二个是新内容，用来替换原来的内容
+
+put全量替换
+客户端必须传入完整的资源数据，未传入的字段会被覆盖为默认值或丢失
 实现方式
-async def update_item(item_id: str, item: Item) -> Item:
+async def update_item(item_id: str, item: Item) -> Item:    #item_id用来提取初始字段，item是完整的模型资源
     pdate_item_encoded = jsonable_encoder(item)   #把新内容转换成json格式
     items[item_id] = update_item_encoded         #替换原来的内容
     return updated_item
-#jsonable_encoder可以把任意数据转化成json数据
+#jsonable_encoder可以把任意对象转化成json数据
 #jsonable_encoder方法：将各种复杂的 Python 对象（比如 Pydantic 模型、datetime 对象等），转换成 JSON 格式存储的数据
 
-patch更新部分数据
-传入两个参数一个用来查找初始数据，第二个是新内容，用来替换原来内容中的部分内容
+patch部分更新
+客户端只需传入需要修改的字段，未传入的字段保留原值不变
 实现方式
-async def update_item(item_id: str, item: Item) -> Item:
+async def update_item(item_id: str, item: Item) -> Item:      #item_id用来提取初始字段，item模型包含的只是需要修改的字段
     stored_item_data = items[item_id]
-    stored_item_model = Item(**stored_item_data)                #创建初始数据模型-----给从字典拿出来的初始数据创建模型
-    update_data = item.model_dump(exclude_unset=True)    #打散传入的模型--------使用户传入的pydantic模型变为json形式
-    #exclude_unset=True：排除掉默认字段，只保留用户输入的内容
-    updated_item = stored_item_model.model_copy(update=update_data)     #用打散出的字典覆盖掉初始数据模型的部分字段，生成最终模型
+    stored_item_model = Item(**stored_item_data)                #创建初始数据模型-----主体模型，用从字典拿出来的初始数据创建模型
+    update_data = item.model_dump(exclude_unset=True)    #取出模型中的数据--------使用户传入的pydantic模型变为字典形式
+    updated_item = stored_item_model.model_copy(update=update_data)     #做合并，用打散出的字典字段覆盖掉初始数据模型的对应字段，生成最终模型
     items[item_id] = jsonable_encoder(updated_item)            #将最终模型转变为json格式，赋值给原字典
     return updated_item
 
-#.model_dump(exclude_unset=True)：把pydantic模型转换成json形式，并排除掉pydantic模型的默认值
-#.model_copy(update=update_data)：基于已存储的旧数据，创建新模型实例，并用 update_data 覆盖指定字段。
+#.model_dump(exclude_unset=True)：Pydantic 模型转字典，并排除掉pydantic模型的默认值
+#.model_copy(update=update_data)：用传入的字段update_data覆盖掉初始模型对应的字段，生成新的模型
 
 
 
@@ -1134,3 +1136,74 @@ put和post、get的划分取决于hettp协议，主要作用在两方面
 #自己或小团队内部写无所谓，但是如果想要融入生态，就必须按照协议来写代码，协议没有强制性，但是生态有
 #可以这样理解生态：在中国的人最好尊重中国的习俗和文化，不遵守协议也可以，但是会处处碰壁，除非你或者你的团队不与人交流
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
+通常见到的错误有两种：
+HTTPException：写在操作函数中，表示某段代码运行时可能会出错
+RequestValidationError：独立于所有操作函数之外，表示接收到的请求信息不符合要求
+#Exception是所有的错误类型的父类，任何错误类型的定义都要继承该类
+响应
+PlainTextResponse：用于返回纯文本格式的 HTTP 响应，而不是 JSON，以下：
+PlainTextResponse("Hello, World!")
+
+错误构成：错误类型+对应的处理器
+#所以一个错误的定义要么新定义类型，要么新定义处理器
+
+自定义错误信息
+实现方式
+if item_id not in items:
+        raise HTTPException(status_code=444,
+                            detail="没有找到这个数据",
+                            headers={"X-Header": "The response headers"}
+                            )
+#status_code是错误代码
+#detail是响应信息
+#headers代表出现在响应体中，表示响应头
+
+
+
+自定义错误处理器
+#处理器关键在于接收的错误类型和返回的结果，这两者决定了处理器针对的错误展示的结果
+#处理器的两个参数request和exc是固定的，这两个参数可以重命名但不能更改顺序
+#request代表了请求对象，是我们接收到的请求数据
+#exc代表错误对象，是我们定义的错误类
+
+新错误类型+新处理器，实现方式
+class UnicornException(Exception):
+    def __init__(self, name: str):
+        self.name = name
+@app.exception_handler(UnicornException)
+async def unicorn_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=411,
+        content={"message": f"天哪! {exc.name} 做了一些事情导致系统崩溃了..."}
+    )
+#当UnicornException错误被触发时，会调用这个处理函数，并且函数返回值就是响应对象
+
+
+旧错误类型+新处理器，实现方式
+from fastapi.exceptions import RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    message='这是一个已经被定义的错误类型，我们修改它的处理方法'
+    return PlainTextResponse(content=message,status_code=400)
+#注意：一个错误类型对应一个处理器，旧错误类型对应新处理器后原处理器就会被覆盖掉
+
+
+当旧的处理器被覆盖掉之后，还想用旧的处理器，可以导入旧处理器模块，按使用模块的方法使用
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"OMG! The client sent invalid data!: {exc}")
+    return await request_validation_exception_handler(request, exc)
+#直接做新处理器的返回值，可以完美的发挥它的性能    ？？？？？？
+
+
+
+exc参数的属性和方法，exc是当前捕获到的异常类的实例对象，在系统异常类型实例中有一些已经被定义好的方法和属性
+属性：
+exc.body：是响应内容
+exc.detail：获取错误响应的描述
+exc.status_code：错误的状态码
+error['loc']：loc数据
+error['msg']：msg数据
+方法：
+exc.errors()：所有验证错误的详细信息列表，是一个嵌套字典
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
