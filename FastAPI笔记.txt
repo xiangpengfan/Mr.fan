@@ -1193,8 +1193,8 @@ async def validation_exception_handler(request, exc: RequestValidationError):
 async def validation_exception_handler(request, exc):
     print(f"OMG! The client sent invalid data!: {exc}")
     return await request_validation_exception_handler(request, exc)
-#直接做新处理器的返回值，可以完美的发挥它的性能    ？？？？？？
-
+#旧的处理器就相当于一个async函数，这里的用法类似函数的嵌套
+#导入就处理器后，可以将它当作一个函数使用
 
 
 exc参数的属性和方法，exc是当前捕获到的异常类的实例对象，在系统异常类型实例中有一些已经被定义好的方法和属性
@@ -1207,3 +1207,34 @@ error['msg']：msg数据
 方法：
 exc.errors()：所有验证错误的详细信息列表，是一个嵌套字典
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
+依赖项简介
+依赖注入：模块化代码结构，梳理出更加清晰的代码边界，主要作用有两个：
+1.更加清晰的调用关系
+#所有的调用都在依赖参数列表中，很快的看到
+2.用简单的依赖引入，并且可以保留依赖项的参数类型
+#在参数列表中甚至一个变量声明就可以完成
+
+
+实现方式
+async def common_parameters(
+        q:str|None=None,
+        skip:int=0,
+        limit:int=100
+):
+    return {"q":q,"skip":skip,"limit":limit}      #创建依赖项
+
+commons=Annotated[dict,Depends(common_parameters)] 
+#抽象导入过程
+#这里commons做数据类型输入
+#Denpends是这里的核心，Denpends和元数据的使用方法有部分相同，但是和定义请求参数类型的元数据有本质区别
+
+async def read_items(commons:commons):
+#导入依赖项
+
+
+依赖项作用主要体现：在层级式的依赖注入系统中，更加方便的抽象父类依赖和进行不同路由的权限管理
+体现在两个方面，以下：
+假设我们有两个依赖项admin_user，paying_user
+1.可以快速对应相应的路由------进行不同路由的权限管理
+2.可以很方便的抽象出这两个依赖的父类active_user，父类还可以抽象出父类的父类current_user
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
