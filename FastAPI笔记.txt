@@ -1381,3 +1381,35 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 #用OAuth2PasswordBearer生成一个实例，这个实例可以提取令牌，只需要把他作为依赖项传入操作函数就可以提取了
 async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+带安全校验的业务代码的结构
+实现方式
+创建pydantic源模型，创建业务模型
+class User(BaseModel):
+    username:str
+    email:str|None=None
+    full_name:str|None=None
+    disabled:bool|None=None
+def fake_decode_token(token):
+    return User(
+        username=token+"曹操",
+        email="55566@dawei.com",
+        full_name="曹孟德",
+        disabled=False
+    )
+
+创建提取器，加入依赖项
+oauth2_scheme=OAuth2PasswordBearer(tokenUrl='token')
+async def get_current_user(token:Annotated[str,Depends(oauth2_scheme)]):
+    return fake_decode_token(token)
+#提取器通常会提取一个令牌
+#将提取器和业务模型组合在一起，保证结果的安全性同时保证业务模型的完整性
+
+将依赖项导入操作函数
+@app.get('/users/me')
+async def read_users_me(current_user:Annotated[User,Depends(get_current_user)]):
+    return current_user
+
+#这一套是极简但是足够标准的提取令牌，校验数据的模型，可以保证代码的安全性和对数据进行过滤，保证数据的质量
+#User模型实例始终贯穿始终，可以把他当作变量来看，进而了解整个代码的结构
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
