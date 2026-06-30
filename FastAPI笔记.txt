@@ -1370,7 +1370,7 @@ OpenAPI：以前称为 Swagger，是构建API的规范，如果想要写一个AP
 OAuth2 ：用户认证应该是一个单独的程序，而不是和业务程序杂糅在一起，我们用OAuth2来实现它
 
 用户认证流程
-前端/客户端----->认证程序--令牌--->前端------>业务后端
+前端/客户端---账号密码-->认证程序--令牌--->前端---令牌--->业务后端
 
 实现方式
 认证程序是一个程序，
@@ -1410,6 +1410,61 @@ async def read_users_me(current_user:Annotated[User,Depends(get_current_user)]):
     return current_user
 
 #这一套是极简但是足够标准的提取令牌，校验数据的模型，可以保证代码的安全性和对数据进行过滤，保证数据的质量
+#输出数据用安全性校验请求，输入数据用模型过滤数据的杂质
 #User模型实例始终贯穿始终，可以把他当作变量来看，进而了解整个代码的结构
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+创建校验程序以及实际的业务流程
+校验程序详解
+用输入的账号从数据库中提取账号信息--------->找不到账号信息将会报错 / 将账号信息打包成模型 --------->将输入的密码加盐与该模型存储的密码相比较-------->相同则登录成功返回令牌 / 反之登录失败
+@app.post("/token")
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user_dict = fake_users_db.get(form_data.username)                   《标记》
+    if not user_dict:   《报错1》
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    user = UserInDB(**user_dict)                                                        《标记》    
+    hashed_password = fake_hash_password(form_data.password) 《标记》
+    if not hashed_password == user.hashed_password:  《报错2》
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    return {"access_token": user.username, "token_type": "bearer"}   《标记》
+#《标记》的是主线，两个《报错》是支线
 
+
+
+整个代码的运行逻辑
+账号密码校验程序+生成哈希密码的小程序----->取值信息/令牌------>/令牌接收器-------->数据库orm操作/------->判断状态是否可以输出---------->路由操作函数输出
+4个函数一个值
+
+实现方式
+1.账号密码校验程序
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+@app.post("/token")
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+          return {"access_token": user.username, "token_type": "bearer"}     #access_token后是令牌，默认这个字典被返回到了后端
+
+2.令牌接收器-------->数据库orm操作
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    user = get_user(token)      #这里是数据库的提取操作
+
+3.判断状态是否可以输出
+async def get_current_active_user(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    if current_user.disabled:
+
+4.路由操作函数输出提取的的值
+current_user: Annotated[User, Depends(get_current_active_user)],
+
+#注意：每一次从数据库中提取操作，都需要经过一遍pydantic模型过滤
+在1中，user_dict = fake_users_db.get(form_data.username)；user = UserInDB(**user_dict)
+在2中，user_dict = db[username]；return UserInDB(**user_dict)
+
+
+
+一般取值逻辑
+输入取值信息------>获取值
+安全的取值逻辑
+输入账号密码------>输入取值信息------->获取值
+#其实就是给取值信息加上了账号和密码
+#如果一个账号密码访问一个取值信息就是，就是个人账户，比如qq，微信，这个可以直接设置一对一判断
+#如果一个账号密码可以访问很多的取值信息，就是公司账号，需要设置权限系统，给账号设置权限+操作函数的权限识别
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
