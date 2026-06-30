@@ -1468,3 +1468,75 @@ current_user: Annotated[User, Depends(get_current_active_user)],
 #如果一个账号密码访问一个取值信息就是，就是个人账户，比如qq，微信，这个可以直接设置一对一判断
 #如果一个账号密码可以访问很多的取值信息，就是公司账号，需要设置权限系统，给账号设置权限+操作函数的权限识别
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+哈希加密密码，以及jwt加密令牌
+整个安全性代码分成两部分：
+第一部分安全校验并发送令牌；第二部分实现接受令牌并返回数据，数据库中提取的数据
+
+jwt加密令牌主要发生在第一部分，验证哈希密码也发生在第一部分，可以说这两部分构成了安全校验的全部内容
+
+
+哈希密码：我们在数据库中存密码时，存哈希密码而不是普通密码
+验证账号和哈希密码
+def authenticate_user(fake_db, username: str, password: str):
+    user = get_user(fake_db, username)
+    if not user:
+        verify_password(password, DUMMY_HASH)     
+        #这里是无效验证，卡一下时间，用来保证无论账号还是密码错误，函数运行时间都一致，以防‘时间攻击’ 
+        #时间攻击：通过函数运行时间来推测账号是否存在，进而攻击指定账号
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user                      #返回一个用户信息
+
+
+jwt加密取值信息令牌
+def create_access_token(data: dict, expires_delta: timedelta | None = None):     #令牌内容和有效时间
+    to_encode = data.copy() 
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})                                                                      #将间隔和内容添加到一起
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)   #生成加密令牌
+    return encoded_jwt
+
+
+将两者结合在一起
+@app.post("/token")
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+) -> Token:
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)    《标记》
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)      《标记》
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )                                                                                                                                           《标记》
+    return Token(access_token=access_token, token_type="bearer")                                     《标记》
+#主要看标记的前三句话，把他们结合在一起
+
+
+
+#在接收的时候需要进行一次解码
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):...........):
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])                      
+#解码出username的值，也就是我们令牌中打包时输入的用户信息
+#其余的获取数据库数据和二重校验、获取当前用户信息的结构和之前描述的相同
+
+
+
+#注意以下两点：
+第一点：
+uv跟着解释器走，在解释器所在的环境下创建一个模块包
+uv跟着项目走，在项目所在的环境下下创建模块包，也是创建在环境中，只不过是跟着项目识别环境；同时，他还会把模块名称版本加在pyproject.toml中
+如果项目和环境相同的话，这两者的唯一区别就是有没有把项目名称版本加入依赖
+
+第二点：
+接收令牌的依赖项暂且称之为令牌依赖项，只有依赖了令牌依赖项的操作函数才受安全性的保护
+其它的路径操作正常运行
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
