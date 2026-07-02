@@ -918,7 +918,9 @@ app = FastAPI()
 @app.post("/items/", status_code=201)
 async def create_item(name: str):
     return {"name": name}
+#响应成功将返回201响应码
 #状态码是程序响应的第一语言，一个合格的状态码可以省去很多团队交流的时间
+
 
 
 常见的状态码代表的意义
@@ -1469,6 +1471,12 @@ current_user: Annotated[User, Depends(get_current_active_user)],
 #如果一个账号密码可以访问很多的取值信息，就是公司账号，需要设置权限系统，给账号设置权限+操作函数的权限识别
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 哈希加密密码，以及jwt加密令牌
+
+所谓的安全性总结起来就一句话：
+保存用哈希密码保存，验证时验证哈希密码
+令牌用jwt(包含内容，时间间隔的字典，密匙，编码方式)加密，接收时用jwt(加密的令牌，密匙，编码方式)解密
+取值信息经过两道验证才能发送到后端操作函数中，这两个合在一起构成了安全性验证
+
 整个安全性代码分成两部分：
 第一部分安全校验并发送令牌；第二部分实现接受令牌并返回数据，数据库中提取的数据
 
@@ -1539,4 +1547,148 @@ uv跟着项目走，在项目所在的环境下下创建模块包，也是创建
 第二点：
 接收令牌的依赖项暂且称之为令牌依赖项，只有依赖了令牌依赖项的操作函数才受安全性的保护
 其它的路径操作正常运行
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+fastapi中数据库的连接和使用
+数据库：在fastapi中，数据库的创建表单主要靠SQLModel，使用靠session通道和模型
+
+数据库的启动与连接
+#创建表单模型
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)     #表单模型一定要有主键
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+    secret_name: str
+#tablle代表这个模型是一个表单模型，没有tabl参数，这个模型和继承BaseModel的pydantic模型没有任何区别
+#Field(index=True)中的index=True表示给这列数据生成索引，以增加索引速度
+
+#创建数据库引擎
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+connect_args = {"check_same_thread": False}
+engine = create_engine(sqlite_url, connect_args=connect_args)
+#第一个参数是文件存储路径
+#第二个参数允许多个线程使用同一个数据库，不会在多个线程访问时报错
+#引擎用来创建生成器和会话器
+
+#创建数据库表生成器
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+#将所有的表模型在数据库中生成表
+
+#创建会话------数据库连接通道
+def get_session():
+    with Session(engine) as session:
+        yield session
+#在每个增删改查操作函数中都需要添加session参数
+
+
+#数据库，启动！
+@app.lifespan
+def on_startup():
+    create_db_and_tables()
+#启动数据库表生成器，并给生成器增加上下文环境，确保表的生成更安全
+
+
+
+
+
+
+使用SQLModel模型和会话session实现数据库的增删改查
+SQLModel模型：增删改查的pydantic模型主要用来过滤用户的输入信息和程序的输出信息
+session：用来实现增删改查，但在输入和输出数据库之前要保证数据准确
+
+实现查增改删
+
+首先创建最高抽象模型，以节省代码量
+class HeroBase(SQLModel):
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+重申表单模型
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)     #表单模型一定要有主键
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+    secret_name: str
+
+查询操作
+#查询操作需要对输出的响应数据做筛选，所以需要创建响应模型
+创建
+class HeroPublic(HeroBase):
+    id: int
+查询多条数据get
+@app.get("/heroes/", response_model=list[HeroPublic])
+def read_heroes(
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+):
+    heroes = session.exec(select(Hero).offset(offset).limit(limit)).all()
+    #重点是这行代码，elect：选择；offset：偏移；limit：限制
+    #elect(Hero)	构建一个查询，表示"我要查询 Hero 这张表/这个模型"              确定表   
+    #offset(offset)	跳过前 N 条记录，从N+1条开始取值（N = 变量 offset 的值）  确定查询起点
+    #limit(limit)	        只取 M 条记录（M = 变量 limit 的值）                                       确定查询数量
+    return heroes
+查询单条数据
+@app.get("/heroes/{hero_id}", response_model=HeroPublic)
+def read_hero(hero_id: int, session: SessionDep):        #导入会话和查询的id
+    hero = session.get(Hero, hero_id)                             #查询单条数据
+    if not hero:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    return hero
+
+增添数据操作post
+#只需要用户增添必要数据，数据库自动分配id，以防id错乱
+创建模型
+class HeroCreate(HeroBase):
+    secret_name: str
+增添数据
+@app.post("/heroes/", response_model=HeroPublic)
+def create_hero(hero: HeroCreate, session: SessionDep):    #过滤的时候用创建模型过滤
+    db_hero = Hero.model_validate(hero)                                
+    #必须以Hero模型的形式传入到数据库
+    #主键再这里添加了
+    #数据库检测到主键后，即使主键是None，系统也会为他自动分配id
+    session.add(db_hero)
+    session.commit()
+    session.refresh(db_hero)
+    return db_hero
+#这里要返回值，一方面要让前端知道自己传进去了一个什么东西
+#输出要把保密信息过滤掉
+
+
+更新数据操作put
+#更新数据不一定更新所有数据，所有每一个数据都应该有默认值，用来保证模型的完整性
+创建模型
+class HeroUpdate(HeroBase):
+    name: str | None = None
+    age: int | None = None
+    secret_name: str | None = None
+更新数据操作
+@app.patch("/heroes/{hero_id}", response_model=HeroPublic)
+def update_hero(hero_id: int, hero: HeroUpdate, session: SessionDep):      
+#hero_id：查找待更新的数据；hero：包含新数据的模型；session：会话，必包含
+    hero_db = session.get(Hero, hero_id)                      
+    #定位待更新的数据
+    #这里的hero_db是一个Hero实例对象
+    if not hero_db:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    hero_data = hero.model_dump(exclude_unset=True)    #把更新模型打散成字典，并提取新数据
+    hero_db.sqlmodel_update(hero_data)                            #新数据插入到旧模型中
+
+删除操作
+#删除操作不需要模型
+@app.delete("/heroes/{hero_id}")  
+def delete_hero(hero_id: int, session: SessionDep):      
+    hero = session.get(Hero, hero_id)                        #找到删除的值
+    if not hero:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    session.delete(hero)                                             #删除它
+
+
+
+alembic：通过更新模型来更新数据库表单
+先进行alembic的配置
+在程序中更新模型---->启动alembic生成差异脚本------>更新数据库
+配置稍微复杂一些
+第一步：绑定数据库连接
+第二部：绑定文件的模型----这一步可以问问ai，有5，6行代码
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
