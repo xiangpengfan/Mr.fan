@@ -918,7 +918,9 @@ app = FastAPI()
 @app.post("/items/", status_code=201)
 async def create_item(name: str):
     return {"name": name}
+#响应成功将返回201响应码
 #状态码是程序响应的第一语言，一个合格的状态码可以省去很多团队交流的时间
+
 
 
 常见的状态码代表的意义
@@ -931,3 +933,798 @@ async def create_item(name: str):
 下载pylance和python扩展后，我们不需要记住每一个响应码代表的意义，只需要打出status.cre,编辑器会自动补全，以下：
 status_code=status.
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+表单参数和表单参数的模型使用
+表单数据：从前端表单中获取数据
+
+定义
+是一个元数据，用来声明请求类型，通过Annotated和Form对操作函数参数声明，以下：
+#请求类型：请求获取数据的方式
+username: Annotated[str, Form()]
+
+
+表单数据Form和json数据Body都从请求体中获取，互相排斥，声明了表单数据Form就无法在声明json数据Body，反之亦然
+#表单数据的独特之处在于可以传输文件，图片视频等数据，这是json数据所无法做到的
+
+
+表单模型
+一个参数最重要的两个类型，数据类型和请求类型
+表单模型：数据类型是pydantic模型，请求类型是表单类型Form，以下：
+class FormData(BaseModel):
+    username: str
+    password: str
+@app.post("/login/")
+async def login(data: Annotated[FormData, Form()]):
+    return data
+#表单参数即使声明pydantic模型，依然是一条一条是输入数据
+
+
+#注意：同时声明Form和Body在交互文档中不会报错，是因为交互文档会统一当作body处理，但在实际应用中不是这样的，以下：
+可以把表单和json想象成两个苦命的打工人，两个打工人共用一个工位-----请求本身，每次工位只能做一个人，请求头Content-Type会显示它的名字：
+Content-Type: application/x-www-form-urlencoded  ← 表单格式
+Content-Type: application/json                    ← JSON格式
+Content-Type: multipart/form-data                 ← 文件上传格式
+所以不能混合接收
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+文件请求参数和参数的文件类型
+本章主要介绍两个传输文件的方法和元数据的配置
+
+
+传输文件通常有两种方法：使用 File() 创建文件参数，以及声明 UploadFile 类型
+
+1.使用 File()创建文件参数
+File()是一种元数据，生态位和其它元数据Query、Body、Cookie、Path相同
+实现方式
+async def create_file(file:Annotated[bytes,File()]):
+#因为File接收到的是纯字节数据（bytes），可以直接写入磁盘：
+with open("目标文件夹", "wb") as f:
+        f.write(file)
+
+2.声明UploadFile类型
+文件类型UploadFile是一种数据类型，生态位等价于str，int，float等
+实现方式
+async def create_upload_file(file:UploadFile):
+
+#相对于File生成文件参数来说，UploadFile可以传送更大的文件并且UploadFile传输的文件可以保存更多的信息，以下
+#UploadFile 实例包含的属性：
+filename文件名、content_type：内容类型（MIME 类型 / 媒体类型）和file文件数据因为接#收到的不是单纯的 bytes，所以需要先读取再写入，以下：
+contents = await myfile.read()
+with open("目标文件夹", "wb") as f:
+        f.write(contents)
+
+
+
+文件参数元数据的配置
+文件参数设置默认值
+async def create_file(file:Annotated[bytes|None,File()]=None):
+async def create_upload_file(file:UploadFile|None=None):
+注意：文件参数即使设置了默认值，操作函数引用时找不到也会报错，所以最好加个筛选
+if not file:
+        return {'文件名称':None,'文件长度':None}
+
+
+文件参数的泛型，以下：
+async def create_file(file:Annotated[list[bytes],File(...,description='这是一个文件参数')]):
+async def create_upload_file(file:Annotated[list[UploadFile],File(...,description='这是一个文件参数')]):
+#注意，我们可以声明一个文件泛型来接收多个文件，但交互文档无法渲染他们
+
+
+文件参数添加筛选条件和描述信息
+async def create_file(file: Annotated[bytes, File(description="A file read as bytes")]):
+async def create_upload_file(
+    file: Annotated[UploadFile, File(description="A file read as UploadFile")],
+):
+
+
+
+UploadFile详解
+#UploadFile 内部使用 SpooledTemporaryFile模块：
+#小文件存在内存中
+#大文件自动写入磁盘临时文件
+#因此不会像 bytes 那样把整个文件一次性加载到内存，所以可以加载更大的内容
+
+#write 写入的是 UploadFile 内部的临时文件对象（内存或磁盘临时文件），不是最终存储位置。
+#一般情况下我们不需要手动调用它，读取文件时数据自然会进入内部缓冲区。
+
+只有在需要修改文件内容后再保存时才用：
+python
+modified_content = ...              # 修改后的内容
+await file.seek(0)                  # 回到开头
+await file.write(modified_content)  # 写入内部临时文件
+await file.seek(0)                  # 再回到开头
+content = await file.read()         # 读取修改后的内容
+#这种用法在实际业务中极少见。
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+表单和文件
+表单和文件可以同时定义，File和UploadFile也可以同时定义，事实上，文件就是一种特殊形式的表单，以下：
+async def create_file(
+    file: Annotated[bytes, File()],
+    fileb: Annotated[UploadFile, File()],
+    token: Annotated[str, Form()],
+):
+
+
+#我们可以同时接收表单数据和文件
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+装饰器参数------交互文档中声明信息
+路径装饰器中传入参数用来给路径增添以下信息：
+状态码
+@app.post("/items/", status_code=status.HTTP_201_CREATED)
+#可以获得编辑器补全
+
+
+标签
+@app.post("/items/", tags=["items"])
+#装饰器声明该信息后，交互文档中，路径带有items标签
+可以把标签归到一个类中，统一管理
+class Tags(Enum):
+    items = "items"
+    users = "users"
+@app.get("/items/", tags=[Tags.items])
+@app.get("/users/", tags=[Tags.users])
+
+
+摘要和描述
+@app.post(
+    "/items/",
+    summary="Create an item",
+    description="Create an item with all the information, name, description, price, tax and a set of unique tags",
+)
+#装饰器添加该信息后，交互文档带有描述和摘要信息
+长的描述
+长的描述可以在操作函数中以前言的形式声明
+async def create_item(item: Item) -> Item:
+    """
+    Create an item with all the information:
+
+    - **name**: each item must have a name
+    - **description**: a long description
+    - **price**: required
+    - **tax**: if the item doesn't have tax, you can omit this
+    - **tags**: a set of unique tag strings for this item
+    """
+    return item
+
+
+ 
+响应描述
+@app.post(
+    "/items/",
+    response_description="The created item",
+)
+#添加该信息后，交互文档下方的示例会带有描述信息
+
+
+标记弃用
+@app.get("/elements/", tags=["items"], deprecated=True)
+#标记后路径不会立刻消失，会整体呈现惨白色，并有Warning: Deprecated字样
+#开发者希望用户可以寻找替代方案并给予用户提前通知
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+更新数据PUT和PATCH
+更新数据分为两种，
+PUT 全量更新：用新数据，整个替换掉旧数据
+ PATCH 部分更新：只修改指定的字段，其余字段保持不变。
+
+
+put全量替换
+客户端必须传入完整的资源数据，未传入的字段会被覆盖为默认值或丢失
+实现方式
+async def update_item(item_id: str, item: Item) -> Item:    #item_id用来提取初始字段，item是完整的模型资源
+    pdate_item_encoded = jsonable_encoder(item)   #把新内容转换成json格式
+    items[item_id] = update_item_encoded         #替换原来的内容
+    return updated_item
+#jsonable_encoder可以把任意对象转化成json数据
+#jsonable_encoder方法：将各种复杂的 Python 对象（比如 Pydantic 模型、datetime 对象等），转换成 JSON 格式存储的数据
+
+patch部分更新
+客户端只需传入需要修改的字段，未传入的字段保留原值不变
+实现方式
+async def update_item(item_id: str, item: Item) -> Item:      #item_id用来提取初始字段，item模型包含的只是需要修改的字段
+    stored_item_data = items[item_id]
+    stored_item_model = Item(**stored_item_data)                #创建初始数据模型-----主体模型，用从字典拿出来的初始数据创建模型
+    update_data = item.model_dump(exclude_unset=True)    #取出模型中的数据--------使用户传入的pydantic模型变为字典形式
+    updated_item = stored_item_model.model_copy(update=update_data)     #做合并，用打散出的字典字段覆盖掉初始数据模型的对应字段，生成最终模型
+    items[item_id] = jsonable_encoder(updated_item)            #将最终模型转变为json格式，赋值给原字典
+    return updated_item
+
+#.model_dump(exclude_unset=True)：Pydantic 模型转字典，并排除掉pydantic模型的默认值
+#.model_copy(update=update_data)：用传入的字段update_data覆盖掉初始模型对应的字段，生成新的模型
+
+
+
+put和post、get的划分取决于hettp协议，主要作用在两方面
+1.统一接口，方便团队协作
+2.融入hettp的生态，可以和编辑器、底层模板识别、交互文档等配合使用
+#协议：最开始只是为了对接方便，加强沟通；使用的人多了之后就会形成生态
+#自己或小团队内部写无所谓，但是如果想要融入生态，就必须按照协议来写代码，协议没有强制性，但是生态有
+#可以这样理解生态：在中国的人最好尊重中国的习俗和文化，不遵守协议也可以，但是会处处碰壁，除非你或者你的团队不与人交流
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+通常见到的错误有两种：
+HTTPException：写在操作函数中，表示某段代码运行时可能会出错
+RequestValidationError：独立于所有操作函数之外，表示接收到的请求信息不符合要求，就是请求参数校验失败
+#Exception是所有的错误类型的父类，任何错误类型的定义都要继承该类
+响应
+PlainTextResponse：用于返回纯文本格式的 HTTP 响应，而不是 JSON，以下：
+PlainTextResponse("Hello, World!")
+
+错误构成：错误类型+对应的处理器，简单来说就是异常类型和异常响应结果
+#所以一个错误的定义要么新定义类型，要么新定义处理器
+
+自定义错误信息
+实现方式
+if item_id not in items:
+        raise HTTPException(status_code=444,
+                            detail="没有找到这个数据",
+                            headers={"X-Header": "The response headers"}
+                            )
+#status_code是错误代码
+#detail是响应信息
+#headers代表出现在响应体中，表示响应头
+
+
+
+自定义错误处理器
+#处理器关键在于接收的错误类型和返回的结果，这两者决定了处理器针对的错误展示的结果
+#处理器的两个参数request和exc是固定的，这两个参数可以重命名但不能更改顺序
+#request代表了请求对象，是我们接收到的请求数据
+#exc代表错误对象，是我们定义的错误类
+
+新错误类型+新处理器，实现方式
+class UnicornException(Exception):
+    def __init__(self, name: str):
+        self.name = name
+@app.exception_handler(UnicornException)
+async def unicorn_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=411,
+        content={"message": f"天哪! {exc.name} 做了一些事情导致系统崩溃了..."}
+    )
+#当UnicornException错误被触发时，会调用这个处理函数，并且函数返回值就是响应对象
+
+
+旧错误类型+新处理器，实现方式
+from fastapi.exceptions import RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    message='这是一个已经被定义的错误类型，我们修改它的处理方法'
+    return PlainTextResponse(content=message,status_code=400)
+#注意：一个错误类型对应一个处理器，旧错误类型对应新处理器后原处理器就会被覆盖掉
+
+
+当旧的处理器被覆盖掉之后，还想用旧的处理器，可以导入旧处理器模块，按使用模块的方法使用
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"OMG! The client sent invalid data!: {exc}")
+    return await request_validation_exception_handler(request, exc)
+#旧的处理器就相当于一个async函数，这里的用法类似函数的嵌套
+#导入就处理器后，可以将它当作一个函数使用
+#注意：自定义的处理器的名称一定不要和旧处理器函数名称相同，否则可能触发处理器的无限迭代或函数的覆盖
+
+
+exc参数的属性和方法，exc是当前捕获到的异常类的实例对象，在系统异常类型实例中有一些已经被定义好的方法和属性
+属性：
+exc.body：是响应内容
+exc.detail：获取错误响应的描述
+exc.status_code：错误的状态码
+error['loc']：loc数据
+error['msg']：msg数据
+方法：
+exc.errors()：所有验证错误的详细信息列表，是一个嵌套字典
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+依赖项简介
+依赖注入：模块化代码结构，梳理出更加清晰的代码边界，主要作用有两个：
+1.更加清晰的调用关系
+#所有的调用都在依赖参数列表中，很快的看到
+2.用简单的依赖引入，并且可以保留依赖项的参数类型
+#在参数列表中甚至一个变量声明就可以完成
+
+
+实现方式
+async def common_parameters(
+        q:str|None=None,
+        skip:int=0,
+        limit:int=100
+):
+    return {"q":q,"skip":skip,"limit":limit}      #创建依赖项
+
+commons=Annotated[dict,Depends(common_parameters)] 
+#抽象导入过程
+#这里commons做数据类型输入
+#Denpends是这里的核心，Denpends和元数据的使用方法有部分相同，但是和定义请求参数类型的元数据有本质区别
+
+async def read_items(commons:commons):
+#导入依赖项
+
+
+依赖项作用主要体现：在层级式的依赖注入系统中，更加方便的抽象父类依赖和进行不同路由的权限管理
+体现在两个方面，以下：
+假设我们有两个依赖项admin_user，paying_user
+1.可以快速对应相应的路由------进行不同路由的权限管理
+2.可以很方便的抽象出这两个依赖的父类active_user，父类还可以抽象出父类的父类current_user
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+类作为依赖项
+类是可调用对象，所以类也可以作为依赖项传入操作函数中
+
+实现方法
+class Item:
+    def __init__(self,q:str|None=None,skip:int=0,limit:int=10):
+        self.q=q
+        self.skip=skip
+        self.limit=limit
+Item_depend=Annotated[Item,Depends()]
+
+@app.get('/item/')
+async def read_items(item:Item_depend):
+#类传入操作函数后，返回值就是类的实例，因此，返回值可以调用类的属性和方法
+
+
+
+类传入操作函数的传统写法
+commons: Annotated[依赖类, Depends(依赖类)]
+#第一个 CommonQueryParams 仅用作类型注解，真正将参数标记为依赖项的是 Depends(依赖类)，并且Depends(依赖类)也声明了参数类型
+#python追求极致的优雅，所以它可以更加简洁
+
+fastapi提供了一种简便的写法
+commons: Annotated[依赖类, Depends()]
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+子依赖项----依赖项的依赖项
+当有两个依赖项时，他们相同的内容可以抽象出来，这个抽象的内容就是子依赖项
+
+实现方式
+创建子依赖项
+def little_query(q:str|None=None):
+    return q
+创建它的子依赖的调用方
+def big_query(q:Annotated[str|None,Depends(little_query)],     #子依赖项引用父依赖项
+              last_query:Annotated[str|None,Cookie()]
+              ):
+引用父依赖
+async def read_items(query:Annotated[big_query,Depends()]):
+    return {'query':query}
+#对依赖项重复值的高级抽象可以帮助我们节省很多的代码量
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+路径装饰器的依赖项------无返回值的依赖项
+路径装饰器依赖项：没有返回值的依赖项
+这些依赖项常用在权限校验、记录日志与审计、 数据库事务的开启与提交等只有动作没有结果的事情上
+
+实现方式
+下面以极简的权限校验为例
+创建依赖项
+async def verify_token(X_token:Annotated[str,Header()]):
+    if X_token != 'fake-super-secret-token':
+        raise HTTPException(status_code=400,detail='X-token 错啦！')
+
+用dependencies导入操作函数
+@app.get('/items/',dependencies=[Depends(verify_token),Depends(verify_key)])
+#即使创建的依赖项有返回值也不会被返回，所以有时可以复用之前创建的依赖项
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+全局依赖项---添加的依赖项将会作用到所有的操作函数上
+全局依赖项：创建一个可以作用到每一个操作函数上的依赖项
+#全局依赖项默认返回值是无法触发的，所以和路由操作依赖项相同，都主要做拦截作用
+
+实现方式
+创建依赖项
+async def verify_token(x_token:Annotated[str,Header()]):
+    if x_token != "fake-token":
+        raise HTTPException(status_code=401,detail="X-Token 错啦！！")
+
+创建fastapi命令对象时添加一个全局依赖项
+app=FastAPI(dependencies=[Depends(verify_token),Depends(verify_key)])
+
+创建操作函数
+@app.get('/items/')
+async def read_items():
+    return [{"item":"小王"},{"item":"李世民"}]
+#函数默认触发全局依赖项
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+带有yield的依赖项
+用depend调用带有yield的依赖项可以实现数据库连接的创建和自动销毁，因此需要创建连接和自动销毁的场景都需要用到yield依赖项
+yield依赖项使用场景：数据库、外部 API、文件系统等所有需要用到上下文管理的地方
+实现方式
+async def get_db():
+    db = DBSession()
+    try:
+        yield db                     #分隔函数，是函数分两步完成
+    finally:
+        db.close()
+#自动销毁原理：在fastapi中，当一个依赖项使用yield的时候，这个依赖项就被增加了上下文环境，用depend调用依赖项时，会自动进入这个上下文环境，并且这个环境会自动识别操作函数的结束标志
+#关于yield：
+#对于迭代器函数，yield可以使迭代器进入运行状态；对于正常的函数，yield可以把一个函数分成两次运行
+#这意味着可以在一个函数/依赖项中实现连接的创建和销毁操作，也就是需要帮我们调用两次，depends实现了第一次手动调用，上下文环境实现了第二次调用
+
+
+
+try....yield...except组合也可以用来捕获错误
+通常我们不这样做，我们有更好的方法抛出错误，直接使用raise，并且可以定义错误处理器，但是try....yield...except确实是一个方法
+def get_username():
+    try:
+        yield "Rick"
+    except InternalError:
+        print(“这里有一个错误")
+        raise
+#except一定要加上raise，一定要把错误抛出去，吞掉错误比抛出错误更可怕
+#错误会逐层抛出，调用函数的错误和子依赖项的错误都会被抛出去，但是调用函数启动的后台进程的错误不会被抛出
+
+
+
+控制依赖项的关闭的时机
+Depends(get_username, scope="function")
+通过scope=function/request来决定我们是在响应前前还是响应后关闭依赖项，进而决定是一次性输出内容还是分批次输出内容
+function：在return前关闭依赖项，一次性传输所有内容，对内存的上限要求更高，但是可以使数据库应对高并发场景
+request：在return后关闭依赖项，分批次传输所有内容对数据库要求更高，要求数据库可以释放更多的连接，但是对内存的要求很低
+如不主动声明，默认 scope="function"，分批次传输
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+一些安全性相关的概念 
+OAuth2：是一个安全性规范，想要保证账户和密码的安全性，就需要按照它的做
+#谷歌，微软，Fc等大厂用的都是这个规范
+#规范：规定做法的范文
+
+OAuth1：简化版的OAuth2，现在已经没什么人使用了
+
+OpenID Connect：基于OAuth2的规范，拓展了一些内容，梳理了一些结构，主体还是OAuth2
+
+OpenAPI：以前称为 Swagger，是构建API的规范，如果想要写一个API框架，最好按照它的规定来，同时API交互文档的生成业主要参考这些规范，这个规范直接包括了OAuth2规范
+
+
+词语释义
+身份认证的提供者：需要验证身份的程序或者服务器
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+用户认证与业务代码的分离
+OAuth2 ：用户认证应该是一个单独的程序，而不是和业务程序杂糅在一起，我们用OAuth2来实现它
+
+用户认证流程
+前端/客户端---账号密码-->认证程序--令牌--->前端---令牌--->业务后端
+
+实现方式
+认证程序是一个程序，
+前端/客户端----->认证程序--令牌--->前端：其实就是前端访问了一个‘/token’网站，然后得到了一个令牌，令牌以变量保存
+前端----->业务后端：前端把令牌放在请求中发送给后端，后端提取令牌
+提取令牌
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+#用OAuth2PasswordBearer生成一个实例，这个实例可以提取令牌，只需要把他作为依赖项传入操作函数就可以提取了
+async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+带安全校验的业务代码的结构
+实现方式
+创建pydantic源模型，创建业务模型
+class User(BaseModel):
+    username:str
+    email:str|None=None
+    full_name:str|None=None
+    disabled:bool|None=None
+def fake_decode_token(token):
+    return User(
+        username=token+"曹操",
+        email="55566@dawei.com",
+        full_name="曹孟德",
+        disabled=False
+    )
+
+创建提取器，加入依赖项
+oauth2_scheme=OAuth2PasswordBearer(tokenUrl='token')
+async def get_current_user(token:Annotated[str,Depends(oauth2_scheme)]):
+    return fake_decode_token(token)
+#提取器通常会提取一个令牌
+#将提取器和业务模型组合在一起，保证结果的安全性同时保证业务模型的完整性
+
+将依赖项导入操作函数
+@app.get('/users/me')
+async def read_users_me(current_user:Annotated[User,Depends(get_current_user)]):
+    return current_user
+
+#这一套是极简但是足够标准的提取令牌，校验数据的模型，可以保证代码的安全性和对数据进行过滤，保证数据的质量
+#输出数据用安全性校验请求，输入数据用模型过滤数据的杂质
+#User模型实例始终贯穿始终，可以把他当作变量来看，进而了解整个代码的结构
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+创建校验程序以及实际的业务流程
+校验程序详解
+用输入的账号从数据库中提取账号信息--------->找不到账号信息将会报错 / 将账号信息打包成模型 --------->将输入的密码加盐与该模型存储的密码相比较-------->相同则登录成功返回令牌 / 反之登录失败
+@app.post("/token")
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user_dict = fake_users_db.get(form_data.username)                   《标记》
+    if not user_dict:   《报错1》
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    user = UserInDB(**user_dict)                                                        《标记》    
+    hashed_password = fake_hash_password(form_data.password) 《标记》
+    if not hashed_password == user.hashed_password:  《报错2》
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    return {"access_token": user.username, "token_type": "bearer"}   《标记》
+#《标记》的是主线，两个《报错》是支线
+
+
+
+整个代码的运行逻辑
+账号密码校验程序+生成哈希密码的小程序----->取值信息/令牌------>/令牌接收器-------->数据库orm操作/------->判断状态是否可以输出---------->路由操作函数输出
+4个函数一个值
+
+实现方式
+1.账号密码校验程序
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+@app.post("/token")
+async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+          return {"access_token": user.username, "token_type": "bearer"}     #access_token后是令牌，默认这个字典被返回到了后端
+
+2.令牌接收器-------->数据库orm操作
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    user = get_user(token)      #这里是数据库的提取操作
+
+3.判断状态是否可以输出
+async def get_current_active_user(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    if current_user.disabled:
+
+4.路由操作函数输出提取的的值
+current_user: Annotated[User, Depends(get_current_active_user)],
+
+#注意：每一次从数据库中提取操作，都需要经过一遍pydantic模型过滤
+在1中，user_dict = fake_users_db.get(form_data.username)；user = UserInDB(**user_dict)
+在2中，user_dict = db[username]；return UserInDB(**user_dict)
+
+
+
+一般取值逻辑
+输入取值信息------>获取值
+安全的取值逻辑
+输入账号密码------>输入取值信息------->获取值
+#其实就是给取值信息加上了账号和密码
+#如果一个账号密码访问一个取值信息就是，就是个人账户，比如qq，微信，这个可以直接设置一对一判断
+#如果一个账号密码可以访问很多的取值信息，就是公司账号，需要设置权限系统，给账号设置权限+操作函数的权限识别
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+哈希加密密码，以及jwt加密令牌
+
+所谓的安全性总结起来就一句话：
+保存用哈希密码保存，验证时验证哈希密码
+令牌用jwt(包含内容，时间间隔的字典，密匙，编码方式)加密，接收时用jwt(加密的令牌，密匙，编码方式)解密
+取值信息经过两道验证才能发送到后端操作函数中，这两个合在一起构成了安全性验证
+
+整个安全性代码分成两部分：
+第一部分安全校验并发送令牌；第二部分实现接受令牌并返回数据，数据库中提取的数据
+
+jwt加密令牌主要发生在第一部分，验证哈希密码也发生在第一部分，可以说这两部分构成了安全校验的全部内容
+
+
+哈希密码：我们在数据库中存密码时，存哈希密码而不是普通密码
+验证账号和哈希密码
+def authenticate_user(fake_db, username: str, password: str):
+    user = get_user(fake_db, username)
+    if not user:
+        verify_password(password, DUMMY_HASH)     
+        #这里是无效验证，卡一下时间，用来保证无论账号还是密码错误，函数运行时间都一致，以防‘时间攻击’ 
+        #时间攻击：通过函数运行时间来推测账号是否存在，进而攻击指定账号
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user                      #返回一个用户信息
+
+
+jwt加密取值信息令牌
+def create_access_token(data: dict, expires_delta: timedelta | None = None):     #令牌内容和有效时间
+    to_encode = data.copy() 
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})                                                                      #将间隔和内容添加到一起
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)   #生成加密令牌
+    return encoded_jwt
+
+
+将两者结合在一起
+@app.post("/token")
+async def login_for_access_token(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+) -> Token:
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)    《标记》
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)      《标记》
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )                                                                                                                                           《标记》
+    return Token(access_token=access_token, token_type="bearer")                                     《标记》
+#主要看标记的前三句话，把他们结合在一起
+
+
+
+#在接收的时候需要进行一次解码
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):...........):
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])                      
+#解码出username的值，也就是我们令牌中打包时输入的用户信息
+#其余的获取数据库数据和二重校验、获取当前用户信息的结构和之前描述的相同
+
+
+
+#注意以下两点：
+第一点：
+uv跟着解释器走，在解释器所在的环境下创建一个模块包
+uv跟着项目走，在项目所在的环境下下创建模块包，也是创建在环境中，只不过是跟着项目识别环境；同时，他还会把模块名称版本加在pyproject.toml中
+如果项目和环境相同的话，这两者的唯一区别就是有没有把项目名称版本加入依赖
+
+第二点：
+接收令牌的依赖项暂且称之为令牌依赖项，只有依赖了令牌依赖项的操作函数才受安全性的保护
+其它的路径操作正常运行
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+fastapi中数据库的连接和使用
+数据库：在fastapi中，数据库的创建表单主要靠SQLModel，使用靠session通道和模型
+
+数据库的启动与连接
+#创建表单模型
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)     #表单模型一定要有主键
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+    secret_name: str
+#tablle代表这个模型是一个表单模型，没有tabl参数，这个模型和继承BaseModel的pydantic模型没有任何区别
+#Field(index=True)中的index=True表示给这列数据生成索引，以增加索引速度
+
+#创建数据库引擎
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+connect_args = {"check_same_thread": False}
+engine = create_engine(sqlite_url, connect_args=connect_args)
+#第一个参数是文件存储路径
+#第二个参数允许多个线程使用同一个数据库，不会在多个线程访问时报错
+#引擎用来创建生成器和会话器
+
+#创建数据库表生成器
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+#将所有的表模型在数据库中生成表
+
+#创建会话------数据库连接通道
+def get_session():
+    with Session(engine) as session:
+        yield session
+#在每个增删改查操作函数中都需要添加session参数
+
+
+#数据库，启动！
+@app.lifespan
+def on_startup():
+    create_db_and_tables()
+#启动数据库表生成器，并给生成器增加上下文环境，确保表的生成更安全
+
+
+
+
+
+
+使用SQLModel模型和会话session实现数据库的增删改查
+SQLModel模型：增删改查的pydantic模型主要用来过滤用户的输入信息和程序的输出信息
+session：用来实现增删改查，但在输入和输出数据库之前要保证数据准确
+
+实现查增改删
+
+首先创建最高抽象模型，以节省代码量
+class HeroBase(SQLModel):
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+重申表单模型
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)     #表单模型一定要有主键
+    name: str = Field(index=True)
+    age: int | None = Field(default=None, index=True)
+    secret_name: str
+
+查询操作
+#查询操作需要对输出的响应数据做筛选，所以需要创建响应模型
+创建
+class HeroPublic(HeroBase):
+    id: int
+查询多条数据get
+@app.get("/heroes/", response_model=list[HeroPublic])
+def read_heroes(
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+):
+    heroes = session.exec(select(Hero).offset(offset).limit(limit)).all()
+    #重点是这行代码，elect：选择；offset：偏移；limit：限制
+    #elect(Hero)	构建一个查询，表示"我要查询 Hero 这张表/这个模型"              确定表   
+    #offset(offset)	跳过前 N 条记录，从N+1条开始取值（N = 变量 offset 的值）  确定查询起点
+    #limit(limit)	        只取 M 条记录（M = 变量 limit 的值）                                       确定查询数量
+    return heroes
+查询单条数据
+@app.get("/heroes/{hero_id}", response_model=HeroPublic)
+def read_hero(hero_id: int, session: SessionDep):        #导入会话和查询的id
+    hero = session.get(Hero, hero_id)                             #查询单条数据
+    if not hero:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    return hero
+
+增添数据操作post
+#只需要用户增添必要数据，数据库自动分配id，以防id错乱
+创建模型
+class HeroCreate(HeroBase):
+    secret_name: str
+增添数据
+@app.post("/heroes/", response_model=HeroPublic)
+def create_hero(hero: HeroCreate, session: SessionDep):    #过滤的时候用创建模型过滤
+    db_hero = Hero.model_validate(hero)                                
+    #必须以Hero模型的形式传入到数据库
+    #主键再这里添加了
+    #数据库检测到主键后，即使主键是None，系统也会为他自动分配id
+    session.add(db_hero)
+    session.commit()
+    session.refresh(db_hero)
+    return db_hero
+#这里要返回值，一方面要让前端知道自己传进去了一个什么东西
+#输出要把保密信息过滤掉
+
+
+更新数据操作put
+#更新数据不一定更新所有数据，所有每一个数据都应该有默认值，用来保证模型的完整性
+创建模型
+class HeroUpdate(HeroBase):
+    name: str | None = None
+    age: int | None = None
+    secret_name: str | None = None
+更新数据操作
+@app.patch("/heroes/{hero_id}", response_model=HeroPublic)
+def update_hero(hero_id: int, hero: HeroUpdate, session: SessionDep):      
+#hero_id：查找待更新的数据；hero：包含新数据的模型；session：会话，必包含
+    hero_db = session.get(Hero, hero_id)                      
+    #定位待更新的数据
+    #这里的hero_db是一个Hero实例对象
+    if not hero_db:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    hero_data = hero.model_dump(exclude_unset=True)    #把更新模型打散成字典，并提取新数据
+    hero_db.sqlmodel_update(hero_data)                            #新数据插入到旧模型中
+
+删除操作
+#删除操作不需要模型
+@app.delete("/heroes/{hero_id}")  
+def delete_hero(hero_id: int, session: SessionDep):      
+    hero = session.get(Hero, hero_id)                        #找到删除的值
+    if not hero:
+        raise HTTPException(status_code=404, detail="Hero not found")
+    session.delete(hero)                                             #删除它
+
+
+
+alembic：通过更新模型来更新数据库表单
+先进行alembic的配置
+在程序中更新模型---->启动alembic生成差异脚本------>更新数据库
+配置稍微复杂一些
+第一步：绑定数据库连接
+第二部：绑定文件的模型----这一步可以问问ai，有5，6行代码
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+中间件
+中间件：是一个独立函数，位于请求和操作函数中间
+#中间件可以在请求到达操作函数和响应输出操作函数之前对请求/响应，进行额外的一步操作
+
+
+创建方式有两种：装饰器创建中间件函数；用类包裹中间件函数，使用中间件方法启动
+装饰器创建中间件函数
+@app.middleware("http")
+async def middle_fun(request: Request, 操作函数):
+#中间件函数包括两个参数：request：请求信息；call_next:操作函数
+#可以在操作函数之前或者之后对请求信息进行修改
+#注意：大多数操作函数都是异步函数，所以在使用时要加上await，以下：
+response = await call_next(request)
+
+类包裹中间件函数，使用方法启动
+class AuthMiddleware(BaseHTTPMiddleware):
+         async def middle_fun(self, request: Request, 操作函数):
+
+app.add_middleware(DebugMiddleware)
+#仍然是两个参数，请求信息和操作函数；仍然可以在操作函数前后对请求信息进行修改
+#类可以创建一个操作函数独有的作用域，为操作函数配置复杂的变量和方法，可以很好的应对大型的中间件函数对参数的需求
+
+
+
+中间件的洋葱结构----多重嵌套
+中间件也可以被其它的中间件嵌套，也就是说cal_next不仅可以是操作函数，还可以是中间件函数
+在多重嵌套的中间件结构中，请求从外到里进入操作函数，响应从里到外输出操作函数：
+请求----->中间4---->...........操作函数------>中间1----->.....---->中间4---->响应
+#就像俄罗斯套娃一样，传值从外到里，取值从里到外，以下:
+@app.middleware("http")
+async def funA(request: Request,操作函数):
+
+@app.middleware("http")
+async def funB(request: Request,funA):
+请求--->funB---->funA----->操作函数----->funA------>funB------>响应
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
