@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小熊猫欢迎页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            background-color: #f5f7fa;
+        }
+
+        /* 顶部三个文字组件样式 */
+        .text-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .text-item {
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .welcome {
+            color: #222;
+        }
+
+        .name {
+            color: #e67e22;
+        }
+
+        /* 按钮样式 */
+        .request-btn {
+            padding: 14px 36px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            background-color: #3498db;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .request-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .request-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        /* 请求状态提示 */
+        .tip-text {
+            font-size: 16px;
+            height: 24px;
+        }
+
+        .success {
+            color: #27ae60;
+        }
+
+        .error {
+            color: #e74c3c;
+        }
+
+        /* 底部接口名称 */
+        .api-info {
+            position: fixed;
+            bottom: 30px;
+            font-size: 15px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部三个文字组件 -->
+    <div class="text-group">
+        <div class="text-item welcome">欢迎您</div>
+        <div class="text-item name">尊贵的小熊猫</div>
+    </div>
+
+    <!-- 按钮区域 -->
+    <button class="request-btn" id="sendBtn">访问后端API</button>
+    <div class="tip-text" id="tip"></div>
+
+    <!-- 底部API名称 -->
+    <div class="api-info">API接口地址：http://localhost:8000</div>
+
+    <script>
+        const btn = document.getElementById('sendBtn');
+        const tip = document.getElementById('tip');
+        const apiUrl = 'http://localhost:8000';
+
+        btn.addEventListener('click', async () => {
+            tip.textContent = '正在请求接口...';
+            tip.className = 'tip-text';
+            btn.disabled = true;
+
+            try {
+                // 发送GET请求，可自行改为POST
+                const res = await fetch(apiUrl);
+                if (res.ok) {
+                    tip.textContent = `请求成功！接口返回状态：${res.status}`;
+                    tip.className = 'tip-text success';
+                } else {
+                    tip.textContent = `接口响应异常，状态码：${res.status}`;
+                    tip.className = 'tip-text error';
+                }
+            } catch (err) {
+                tip.textContent = '连接失败，请确认本地8000端口服务已启动';
+                tip.className = 'tip-text error';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
