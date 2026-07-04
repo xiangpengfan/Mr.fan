@@ -1692,3 +1692,205 @@ alembic：通过更新模型来更新数据库表单
 第一步：绑定数据库连接
 第二部：绑定文件的模型----这一步可以问问ai，有5，6行代码
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+中间件
+中间件：是一个独立函数，位于请求和操作函数中间
+#中间件可以在请求到达操作函数和响应输出操作函数之前对请求/响应，进行额外的一步操作
+
+
+创建方式有两种：装饰器创建中间件函数；用类包裹中间件函数，使用中间件方法启动
+装饰器创建中间件函数
+@app.middleware("http")
+async def middle_fun(request: Request, 操作函数):
+#中间件函数包括两个参数：request：请求信息；call_next:操作函数
+#可以在操作函数之前或者之后对请求信息进行修改
+#注意：大多数操作函数都是异步函数，所以在使用时要加上await，以下：
+response = await call_next(request)
+
+类包裹中间件函数，使用方法启动
+class AuthMiddleware(BaseHTTPMiddleware):
+         async def middle_fun(self, request: Request, 操作函数):
+
+app.add_middleware(DebugMiddleware)
+#仍然是两个参数，请求信息和操作函数；仍然可以在操作函数前后对请求信息进行修改
+#类可以创建一个操作函数独有的作用域，为操作函数配置复杂的变量和方法，可以很好的应对大型的中间件函数对参数的需求
+
+
+
+中间件的洋葱结构----多重嵌套
+中间件也可以被其它的中间件嵌套，也就是说cal_next不仅可以是操作函数，还可以是中间件函数
+在多重嵌套的中间件结构中，请求从外到里进入操作函数，响应从里到外输出操作函数：
+请求----->中间4---->...........操作函数------>中间1----->.....---->中间4---->响应
+#就像俄罗斯套娃一样，传值从外到里，取值从里到外，以下:
+@app.middleware("http")
+async def funA(request: Request,操作函数):
+
+@app.middleware("http")
+async def funB(request: Request,funA):
+请求--->funB---->funA----->操作函数----->funA------>funB------>响应
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+跨源通信----模拟真实的前端访问后端api
+前端 源 的概念，源是浏览器自动分配的
+源：一个服务器地址，由协议+域+端口构成，这个地址包含了很多文件，文件之间可以自由通信---前端可以调用后端api，后端可以接受 前端的消息
+#源包含一个主文件，输入地址默认直接打开主文件，也可以通过  源/文件名  打开其它文件
+#常见的协议：http，https；域：myapp.com，localhost，localhost.tiangolo.com；端口：80、443、8080
+
+
+
+前端和后端天然不同源，因为它们运行在不同的环境中（浏览器 vs 服务器），端口必然不同，所以前端调用后端api必须实现跨域操作
+中间件CORSMiddleware可以实现跨域协作
+#其实就是后端设置白名单，允许前端调用------即使加入白名单，前端也无法访问被jwt加密的方法
+实现方法
+导入中间件
+from fastapi.middleware.cors import CORSMiddleware
+创建白名单
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+]
+启用中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,         #启用白名单
+    allow_credentials=True,     #允许cookie传入后端
+    allow_methods=["*"],          #允许访问所有方法
+    allow_headers=["*"],           #允许所有请求头传入后端
+) 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+模拟前端访问后端的api
+前端访问后端api需要跨域操作
+启动后端服务------>启动前端服务------->将前端的源加入后端白名单
+#前端服务一定是用python启动的，而不是直接用浏览器打开的，用浏览器打开前端文件没有源
+
+实现方式
+启动后端服务
+fastapi dev 文件名称
+
+启动前端服务
+先进入包含前端文件的文件夹
+python -m http.server 3000
+#会自动启动当前文件夹下的index.html文件，并给他分配源http://localhost:3000
+
+将前端的源加入到后端的白名单
+参照跨域操作
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+项目的结构与运行方式
+一个传统的后端项目由4部分构成：启动入口、依赖项文件、核心处理业务和工具函数-----部分时候还有配置中心/环境变量
+#清晰的项目结构划分有助于团队协作和后续的更新维护
+
+├── app
+│   ├── __init__.py
+│   ├── main.py
+│   ├── dependencies.py
+│   └── routers
+│   │   ├── __init__.py
+│   │   ├── items.py
+│   │   └── users.py
+│   └── internal
+│       ├── __init__.py
+│       └── admin.py
+
+启动入口main：负责集成模块和配置环境
+依赖项文件dependencies：核心业务的依赖项，只有被业务依赖后才可以运行，无法独立运行
+核心业务模块routers：核心业务被划分成多个模块，在每一个子模块中，通过router创建路由
+工具函数internal：可以独自运行的非必要函数，是一个纯函数。如：邮箱、手机号校验，时间处理，加密/解密等
+#纯函数：相同的输入得到相同的输出
+
+
+本节主要了解依赖项和核心业务模块的创建方式，和它们集成到主函数的方式
+创建依赖项
+#依赖项就是函数，创建依赖项就是创建函数，将所有的依赖项创建在一个代码文件中
+#在app/dependencies.py文件中创建需要的函数，以下：
+from typing import Annotated
+from fastapi import Header, HTTPException
+async def get_token_header(x_token: Annotated[str, Header()]):
+    if x_token != "fake-super-secret-token":
+        raise HTTPException(status_code=400, detail="X-Token header invalid")
+#这是一个捕获并验证请求头中’x_token‘字段的函数
+
+
+
+创建核心业务模块
+#业务模块就是实现一个功能的一组路由所组成的文件，一个项目通常被拆分成很多个业务模块
+#以users.py中的路由为例
+router = APIRouter()
+@router.get("/users/", tags=["users"])
+async def read_users():
+    return [{"username": "Rick"}, {"username": "Morty"}]
+@router.get("/users/me", tags=["users"])
+async def read_user_me():
+    return {"username": "fakecurrentuser"}
+#子模块要集成至入口函数不能直接用FastAPI,要用APIRouter()
+# APIRouter()效果和FastAPI完全相同，但是它的关联方法app.include_router(目标router)可以迁移路由
+
+#使用APIRouter()统一增添信息
+APIrouter在定义时可以给所有的路由统一增添信息，如：prefix前置路由、tags标签、dependencies依赖函数、responses响应信息等，以下：
+router = APIRouter(
+    prefix="/items",
+    tags=["items"],
+    dependencies=[Depends(get_token_header)],
+    responses={404: {"description": "Not found"}},
+)
+
+
+
+文件的导入
+依赖项导入业务文件
+#依赖项本质是函数，依赖项导入只需要路径导入
+导入方式
+from 业务文件的根目录.次级目录 import 依赖项名称
+以上方文件为例，以下：
+#根目录=app，从app往下找；次级目录=dependencise；依赖项名称=get_token_header
+from app.dependencise import get_token_header
+
+业务模块导入主函数
+导入方式
+第一步
+from 主函数的根目录.次级目录 import 依赖项名称
+以上方文件为例，以下：
+#根目录=app；次级目录=routers；模块名称=users
+from app.routers import users
+第二步
+#使用app.include_router(目标router)方法将路由文件全部导入
+
+
+相对导入
+#区别：以当前文件为基准，通过‘.’来定位根目录
+#一个点就向上定位一层
+当前文件是users：app='..'
+当前文件是main.py:app='.'
+#次级目录的导入和绝对导入相同----绝对导入是上面介绍的导入方式
+
+
+使用app.include_router(目标router)统一增添信息
+#app.include_router(目标router)和APIRouter()都可以为模块内所有路由统一增添额外信息，效果相同
+#区别在于一个在子模块内使用，一个在主函数中使用
+前者更方便；后者的优势在于可以更方便的更新和维护，对于共享的子模块可以特色化的使用，以下：
+app.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(get_token_header)],
+    responses={418: {"description": "I'm a teapot"}},
+)
+
+
+
+配置环境变量
+#因为项目主函数在app文件夹中，所以’fastapi dev‘不能直接访问到，需要创建路径
+在pyproject.toml文件中配置环境
+[tool.fastapi]
+entrypoint = "app.main:app"
+#entrypoint = "模块路径:FastAPI实例名称"
+#如此，fastapi可以直接访问main文件
+
+
+
+路由树
+#任何的子模块可以去导入其它的子模块，在主函数中，它们会被一起显示
+#在大型多次更新维护的项目里，各个子模块的多层级导入使路由信息变得极为复杂，所以通常情况下避免跨级导入子模块，以下：
+主函数导入A模块，A模块导入B模块，B模块导入C模块
+A模块是第一层级，应该避免直接导入第三层级的C模块
+#一个完全没有跨级导入的路由系统，整体的形象就像是一个主函数做主干，各层级模块逐渐展开的路由树
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

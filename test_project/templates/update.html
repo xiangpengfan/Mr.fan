@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>修改密码</title>
+    <style>
+        body {background: #f0f7ff; display: flex; justify-content: center; align-items: center; height: 100vh; margin:0;}
+        .update-card {background: white; padding: 40px 30px; border-radius: 10px; width: 380px; box-shadow: 0 2px 15px #c1d8f0;}
+        h2 {text-align: center; margin-bottom: 30px; color: #222;}
+        .item {margin-bottom: 18px;}
+        label {display: block; margin-bottom: 8px; font-weight: 500;}
+        input {width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;}
+        button {width: 100%; padding:13px; background:#28a745; color:white; border:none; border-radius:6px; font-size:17px; cursor:pointer;}
+        button:hover {background:#218838;}
+        .back {text-align:center; margin-top:20px;}
+        .back a {color:#007bff; text-decoration:none; margin:0 8px;}
+    </style>
+</head>
+<body>
+    <div class="update-card">
+        <h2>修改账号密码</h2>
+        <form action="/users/update" method="post">
+            <div class="item">
+                <label>用户名</label>
+                <input type="text" name="username" required>
+            </div>
+            <div class="item">
+                <label>原密码</label>
+                <input type="password" name="password" required>
+            </div>
+            <div class="item">
+                <label>新密码</label>
+                <input type="password" name="new_password" required>
+            </div>
+            <button type="submit">确认修改</button>
+        </form>
+        <div class="back">
+            <a href="/index">首页</a>
+            <a href="/login">登录</a>
+        </div>
+    </div>
+</body>
+</html>
