@@ -1894,3 +1894,40 @@ entrypoint = "app.main:app"
 A模块是第一层级，应该避免直接导入第三层级的C模块
 #一个完全没有跨级导入的路由系统，整体的形象就像是一个主函数做主干，各层级模块逐渐展开的路由树
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+流式传输
+流式传输：连续不断的传输数据，确保数据传输的实时性
+#与此相反的是，一次性传输
+#一次性传输速度快，但对缓存要求高；流式传输速度慢，对缓存要求低
+
+实现方式
+#把数据分成一块一块的形式，用yield一块一块的传输
+class Item(BaseModel):
+    name: str
+    description: str | None
+items = [
+    Item(name="Plumbus", description="A multi-purpose household device."),
+    Item(name="Portal Gun", description="A portal opening device."),
+    Item(name="Meeseeks Box", description="A box that summons a Meeseeks."),
+]                                                        #假设items是一个完整的数据，我们通过一些方法将他分成一段一段的形式，这里如何把数据切割
+
+@app.get("/items/stream")                                      
+async def stream_items() -> AsyncIterable[Item]:
+    for item in items:
+        yield item                                  #循环遍历items，用yield一段一段的发送
+#Pydantic 模型在被作为响应发送出去前，会经历一个“序列化”的过程，最终在响应体中是类似于字典结构形式
+#关于AsyncIterable异步迭代器
+#普通迭代器可以一块一块的输出数据，异步迭代器可以异步一块一块的输出数据，放在响应类型注释中，区别在于异步
+
+
+所以响应体的数据结构
+items={{name="Plumbus", description="A multi-purpose household device."}，
+             {name="Portal Gun", description="A portal opening device."}，
+             {name="Meeseeks Box", description="A box that summons a Meeseeks."}}
+
+
+原理
+流式传输请求头是application/jsonl，一般的json数据请求头是 application/json，后台通过jsonal来识别不同的请求对象
+返回数据的形式：jsonal：[{数据1}，{数据2}.。。。]，json：{数据体}
+
+流式响应无法在浏览器中显示出来很正常，因为本来就不是给客户端看的，而是发送给前端处理的；前端绝对是一块块显示还是收到后一起显示
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
