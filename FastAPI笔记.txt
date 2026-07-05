@@ -1896,8 +1896,9 @@ A模块是第一层级，应该避免直接导入第三层级的C模块
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 流式传输
 流式传输：连续不断的传输数据，确保数据传输的实时性
-#与此相反的是，一次性传输
-#一次性传输速度快，但对缓存要求高；流式传输速度慢，对缓存要求低
+#与此相反的是，一次性传输，一次性传输速度快，但对缓存要求高；流式传输速度慢，对缓存要求低
+#最重要的两点是，已经被打散的数据和yield的连续不断的传输
+
 
 实现方式
 #把数据分成一块一块的形式，用yield一块一块的传输
@@ -1930,4 +1931,74 @@ items={{name="Plumbus", description="A multi-purpose household device."}，
 返回数据的形式：jsonal：[{数据1}，{数据2}.。。。]，json：{数据体}
 
 流式响应无法在浏览器中显示出来很正常，因为本来就不是给客户端看的，而是发送给前端处理的；前端绝对是一块块显示还是收到后一起显示
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sse事件传输
+SSE：一种用来做流式传输的特殊json响应格式
+#通常情况下，服务器像前端传输数据都是以json格式传输
+#sse用json格式传输普通的文本数据，通常应用在：大模型、股票监控、消息推送等领域
+#区别于一般的流式传输的两点是，固定的响应格式和可以被识别的多样的参数
+
+
+SSE规定的响应格式-------字段名：值  组成的排列
+event: newMessage
+id: 2026070501
+data: {"from": "Alice", "content": "你好！", "time": "12:00"}
+
+
+实现方式
+sse限制响应格式的实现----EventSourceResponse
+from fastapi.sse import EventSourceResponse
+@app.get("/items/stream", response_class=EventSourceResponse)   ##将数据解码成sse的json格式
+async def sse_items() -> AsyncIterable[Item]:          #AsyncIterable是编码器，将输出的格式转换成字典或json格式
+#若是同步函数，则使用Iterable
+#若没有类型注释，默认使用jsonable_encoder编码器将pydantic模型转换成dict
+    for item in items:
+        yield item
+#默认情况下用字段data连续接收的yield数据并发送，以下发送的一个片段：
+data: {"Item"："name="Plumbus", description="A multi-purpose household device.""}
+
+
+给响应格式增加字段-------ServerSentEvent
+from fastapi.sse import EventSourceResponse
+@app.get("/items/stream", response_class=EventSourceResponse)  
+async def sse_items() -> AsyncIterable[Item]:
+     i=0    
+    for i，item in enumerate（items）:
+        yield ServerSentEvent(data=item, event="item_update", id=str(i + 1), retry=5000)
+#给see的json格式加上其它字段
+#以下是增添字段后的报文格式
+event: "item_update"
+id: str(i + 1)
+retry=5000
+data: {"Item"："name="Plumbus", description="A multi-purpose household device.""}
+
+
+
+sse响应格式对应的浏览器解释器
+#浏览器可以识别sse格式的json响应数据，并对特别的字段做转化
+#对id的转化可以实现流数据的中断续传
+流的中断与自动恢复
+#当浏览器中的流数据中断后，再次用浏览器访问同一个api链接时，浏览器会把中断时的id数据赋值给Last-Event-ID传输到api中
+#api可以识别这个数据，然后继续上次的流数据发送，以下：
+async def stream_items(
+    last_event_id: Annotated[int | None, Header()] = None,
+) -> AsyncIterable[ServerSentEvent]:                                    #首先识别到last_event_id: Annotated数据格式
+     start = last_event_id + 1 if last_event_id is not None else 0 
+     #对last_event_id: Annotated数据格式做处理，确保没有last_event_id: Annotated时不会报错
+     for i, item in enumerate(items):                                      #对所有的值的序列做一个排号
+             if i < start:
+                 continue
+             yield ServerSentEvent(data=item, id=str(i))           #输出大于start的值，就是继续上次运行位置继续运行
+#retry参数：如果连接意外断开，应该在多少毫秒后尝试重新连接
+#id：浏览器用来确定到第几块数据
+#event：事件类型/数据类型，发送的文本，图片，视频都是不同的事件类型
+
+
+
+sse非json的响应数据
+#sse流式数据为我们提供了，非json格式的响应数据，外面可以用sse进行流式输出，但是用非json的形式打包，甚至不打包数据
+使用ServerSentEvent的raw_data参数，以下：
+yield ServerSentEvent(raw_data="[DONE]", event="done")
+#[DONE]字段会以纯文本的形式传输，而非json格式
+#补充：目前常用的数据格式时json格式--超级主流，除此以外，还用XML、 Form Data、 Protocol Buffers等
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
