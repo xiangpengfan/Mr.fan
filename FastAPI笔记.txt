@@ -2002,3 +2002,39 @@ yield ServerSentEvent(raw_data="[DONE]", event="done")
 #[DONE]字段会以纯文本的形式传输，而非json格式
 #补充：目前常用的数据格式时json格式--超级主流，除此以外，还用XML、 Form Data、 Protocol Buffers等
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+后台任务---响应完成后继续运行的任务
+后台任务：响应完成之后才执行的任务
+
+实现方式：
+传入BackGroundTasks参数，使用add_task方法
+#所有功能的实现都需要通过函数，传入参数的方式是定义参数
+async def send_notification(email: str, background_tasks: BackgroundTasks):                          #定义参数
+          background_tasks.add_task(write_notification, email, message="some notification")      #使用函数
+#add_task方法模型
+#background_tasks.add_task(函数, 函数的参数1, 函数的参数2)
+
+
+
+后台函数的一对多结构
+#后台任务可以通过依赖项的方式实现多次嵌套，这种嵌套可以使很多业务函数直接调用后台任务函数写入日志，而不需要重新写写入逻辑
+def write_log(message: str):
+def get_query(background_tasks: BackgroundTasks, q: str | None = None):   
+        background_tasks.add_task(write_log, message)
+def get_query(background_tasks: BackgroundTasks, q: Annotated[str, Depends(get_query)):    
+        #这里把  包含后台任务的函数  作为依赖项传入以参数的方式传入操作函数
+        #这里是第一次写入日志，目标函数调用后台函数
+        ...
+        background_tasks.add_task(write_log, message)             #这里是第二次写入,直接调用后台函数
+        ....
+async def send_notification(email: str, background_tasks: BackgroundTasks, q: Annotated[str, Depends(get_query)]):
+#这里将包含后台任务的函数作为依赖项导入，所以这里有两个嵌套的后台任务，依赖项被触发后，跳转get_query,再响应后跳转ge...y的后台任务write_log,在响应后跳转wr...g的后台任务
+#函数是可以直接使用的，但是参数类需要引用
+
+
+
+#章末小节
+1.在fastapi中实现功能的方式是添加函数，添加函数的方式是引入参数--在操作函数中
+2.实现后台任务的方法/函数是：
+background_tasks.add_task(函数, 函数对应参数1, 函数的参数2)
+3.后台任务是在响应发送之后运行的任务
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
