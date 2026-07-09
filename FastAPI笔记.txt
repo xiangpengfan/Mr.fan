@@ -2038,3 +2038,79 @@ async def send_notification(email: str, background_tasks: BackgroundTasks, q: An
 background_tasks.add_task(函数, 函数对应参数1, 函数的参数2)
 3.后台任务是在响应发送之后运行的任务
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+文档注释和文档地址
+文档注释就是文档元数据，用来显示说明文档信息，这个注释信息显示在文档头部
+#操作函数参数中也可以设置元数据，解释路由；路由中也可以设置元数据，解释路由；这些元数据都会在交互文档中提现
+
+实现方式
+在创建api实例的时候设置文档数据，以下：
+app = FastAPI(
+    title="ChimichangApp",
+    description=description,
+    summary="Deadpool's favorite app. Nuff said.",
+    version="0.0.1",
+    terms_of_service="http://example.com/terms/",
+    contact={
+        "name": "Deadpoolio the Amazing",
+        "url": "http://x-force.example.com/contact/",
+        "email": "dp@x-force.example.com",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    },
+)
+#它们会显示在交互文档的头部，向word文档一样
+
+常见文档元数据释义
+title	                      str	 文档标题。
+summary	str	      文档摘要
+description	      文档描述，可以使用 Markdown设置字体          #描述详细摘要简短，就像  书的一节内容-描述和书的难点概述-摘要  一样
+version	              str	 API 的版本
+terms_of_service   str	 API 服务条款的链接，必须是以链接的形式展现
+contact	              dict	 你的手机号、邮箱地址和社交帐号等等，一切能联系到你的东西，展示形式见上文
+license_info	      dict	 API 的许可证信息，你的api的开放权限，全开源、半开源还是闭源
+
+
+
+创建api实例的时候也可以添加路由元数据/注释
+传统方式设置路由元数据
+@app.get("/users/", tags=["users"]，description="Manage items. So _fancy_ they have their own docs.")
+创建api添加路由元数据
+tags_metadata = [
+    {
+        "name": "users",
+        "description": "Operations with users. The **login** logic is also here.",
+    },
+]
+app = FastAPI(openapi_tags=tags_metadata)
+@app.get("/users/", tags=["users"])      #这里需要标签名来识别到标签统一添加
+#这两者效果完全相同，前者适合给单个路由添加元数据，后者适合对元数据做统一的集体管理
+
+常见路由数据释义
+name（必填）：      一个 str，通过name来识别tag，进而给指定文档添加描述信息
+description：          一个 str，该标签的简短描述。可以使用 Markdown来设置字体
+externalDocs：      一个 dict，描述外部文档，包含：    #当一个文档说明不了代码信息的适合就需要引入外部文档
+　　description：   一个 str，该外部文档的简短描述。
+　　url（必填）：    一个 str，该外部文档的 URL，如果有外部文档则必须填写外部文档的url
+
+
+
+
+文档地址
+默认情况下，文档保存在缓存中
+可以通过 主机/openapi.json 访问原始文档信息
+也可以通过 主机/docs 访问渲染过后的交互文档；或者 主机/redoc 下载txt版的文档信息
+
+
+修改文档初始地址
+可以修改文档的初始地址，以下：
+app = FastAPI(openapi_url="/api/v1/openapi.json")
+#这个地址只会保存在缓存中，无法通过硬盘或者服务器来访问
+
+修改文档渲染后的地址
+可以修改docs/redoc的访问路径，以下：
+app = FastAPI(docs_url="/documentation", redoc_url=None)
+#两个文档都可以自定义访问路径，同时也都可以设置禁用或者启用
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
