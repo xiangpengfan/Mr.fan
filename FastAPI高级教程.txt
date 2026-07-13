@@ -1,0 +1,28 @@
+-------------------------------------------------------------------------------------------------------------------------------------------
+流式数据StringResponse
+流式数据：发送纯粹的不加修饰的原始数据
+作用：大模型文字显示，视频/图片传输，特大型文件传输
+
+回顾：序列化，把活的数据转换成可以传输的形式-json、bytes等
+
+
+实现方式
+#在路由参数中添加response_class
+@app.get("/story/stream-no-async", response_class=StreamingResponse)
+def stream_story_no_async() -> Iterable[str]:   #这个注释可有可无
+    for line in message.splitlines ():
+        yield line                                            #数据分段传输
+
+自定义http请求
+class PNGStreamingResponse(StreamingResponse):
+    media_type = "image/png"
+    status_code="状态码"
+@app.get("/story/stream-no-async", response_class=PNGStreamingResponse)
+#直接使用PNG就可以自定义HTTP请求
+
+
+respons_model和response_class的区别
+response_model负责校验和把数据转化成可传输的形式，response_class负责修饰http的请求头、状态码和编码方式
+在fastapi中可以用类型注解来替代response_model使用，效果完全相同--校验和序列化数据
+StringResponse传输的是原始数据，不需要序列化也不需要校验，所以完全可以不用类型注释/response_model
+---------------------------------------------------------------------------------------------------------------------------------------------
