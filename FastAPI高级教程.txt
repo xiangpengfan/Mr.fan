@@ -26,3 +26,155 @@ response_model负责校验和把数据转化成可传输的形式，response_cla
 在fastapi中可以用类型注解来替代response_model使用，效果完全相同--校验和序列化数据
 StringResponse传输的是原始数据，不需要序列化也不需要校验，所以完全可以不用类型注释/response_model
 ---------------------------------------------------------------------------------------------------------------------------------------------
+路由参数和手写文档
+路由参数
+1.operation_id=:给路由设置唯一的id号
+使用方法
+@app.get("/items/", operation_id="唯一id")
+
+2.genrate_unique_id_function=:通过函数给路由设置唯一的id号
+使用方法
+def 函数1(route: APIRoute) -> str:
+    return route.name
+app = FastAPI(generate_unique_id_function=函数1)
+
+3.include_in_schema=:禁止该路由出现在文档中
+使用方法
+@app.get("/items/", include_in_schema=False)
+作用：有一些路由是为了实现负载均衡、k8s等自动化功能，这些路由不需要出现在前后端的交互文档中，这时需要使用这个参数
+
+4.\f“换页”的转义字符:禁止部分出现注释出现在交互文档中
+使用方法
+    """
+    Create an item with all the information:
+
+    - **name**: each item must have a name
+    - **description**: a long description
+    - **price**: required
+    - **tax**: if the item doesn't have tax, you can omit this
+    - **tags**: a set of unique tag strings for this item
+    \f
+    :param item: User input.
+    这部分不会出现在交互文档中
+    """
+作用：交互文档传递关键信息，其余信息由工具自动识别
+
+
+
+手写json说明文档
+openapi_extra=：可以给json文档增添信息
+使用方法
+@app.get("/items/", openapi_extra={"x-aperture-labs-portal": "blue"})
+json文档----省略括号，只做演示
+    "openapi": "3.1.0",
+    "info":
+        "title": "FastAPI",
+        "version": "0.1.0"
+    "paths": 
+        "/items/": 
+            "get": 
+                "summary": "Read Items",
+                "operationId": "read_items_items__get",
+                "responses": 
+                    "200": 
+                        "description": "Successful Response",
+                        "content": 
+                            "application/json": 
+                                "schema": {}
+                "x-aperture-labs-portal": "blue"     #这是额外增加的内容
+
+
+覆盖已有的json数据
+#openapi_extra可以给json文档增添信息也可以覆盖json文档的已有内容----手写operationId会覆盖原始的operationId，手写reponse会和原始的reponse合并，具体json格式可以参考下方附件
+#参考上诉json文档，如果是"x-aperture-labs-portal"会被增添到最后；如果是"requestBody"则会被增添到"get"中，以下：
+@app.post(
+    "/items/",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "required": ["name", "price"],
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "price": {"type": "number"},
+                            "description": {"type": "string"},
+                        },
+                    }
+                }
+            },
+            "required": True,
+        },
+    },
+)
+
+json文档
+"get": 
+      .......
+      "requestBody"
+
+
+手动解析json数据同时手动写json说明文档
+#手写说明文档，对pydantic模型无法直接解析的请求，手动解析请求生成文档
+@app.post(
+    "/items/",
+    openapi_extra={
+        "requestBody": {
+            "content": {"application/x-yaml": {"schema": Item.model_json_schema()}},
+            "required": True,
+        },
+    },
+)
+#application/x-yaml：声明请求的格式；"schema"：要解析出的内容
+#手写json的作用是作为说明书，解析还是解析的原始的请求
+#就像积木和组装说明书
+
+
+#手动解析请求
+#这是手写说明文档的核心作用，当解析那些无法被pydantic模型直接解析的请求时，手写json文档作为测试或沟通的材料
+async def create_item(request: Request)     #首先拿到请求数据---假设数据是yaml型
+data = yaml.safe_load(raw_body)                #用safe_load解析成字典形式
+item = Item.model_validate(data)                 #model_validate解析成pydantic形式，完成手动解析
+
+
+#总之，手写说明文档的主要作用就是替换pydantic无法直接解析的请求内容
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+附件：json的数据格式
+附：一个完整的openapi.json对象由6部分构成
+"openapi": "3.1.0",          // ← OpenAPI 版本
+  "info": { ... },                  // ← API 基本信息
+  "servers": [ ... ],            // ← 服务器地址----可有多个
+  "paths": { ... },              // ← 核心：所有接口定义
+  "components": { ... },   // ← 可复用的组件----模型、安全方案等
+  "security": [ ... ]           // ← 全局安全认证
+
+
+在path部分中，一个路由对象/operation对象是这个样子的
+"/users": {                                      //←路由名称,这个不包含在operation对象中
+"get": {
+  "operationId": "get_users",          // ← 唯一标识符----默认用函数名
+  "summary": "获取用户列表",              // ← 短摘要
+  "description": "分页返回所有用户",    // ← 详细描述
+  "tags": ["用户管理"],                    // ← 分组标签
+  "parameters": [ ... ],                    // ← 参数定义----查询参数、路径参数、请求头等
+  "requestBody": { ... },                 // ← 请求体---POST/PUT 用
+  "responses": { ... }                     // ← 响应定义----必须存在
+}
+
+requestbody参考上文
+}
+
+
+在operation对象中，requestBody长这个样子
+"requestBody": {                          // ← 1. 请求体
+    "content": {                              // ← 2. 内容
+        "application/json": {             // ← 3. 数据格式
+            "schema": {                     // ← 4. 数据模型结构
+                "required": ["name", "price"],   // ← 必填字段
+                "type": "object",                       // ← 数据类型：对象
+                "properties": {                         // ← 对象的属性列表
+                    "name": {"type": "string"},
+                    "price": {"type": "number"},
+                    "description": {"type": "string"}
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
