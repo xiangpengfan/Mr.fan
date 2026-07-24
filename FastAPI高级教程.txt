@@ -200,7 +200,7 @@ async def 函数()
 2.默认情况下，其它数据会先经过 jsonable_encoder 编码再自动转换成json格式
 3.手动使用JSONResponse类转换成json格式
 
-也可以不使用json格式直接返回数据本身，以下：
+也可以不使用json格式自定义返回数据的格式，以下：
 #返回一个xml数据
 data=xml数据
 return Response(content=data, media_type="application/xml")
@@ -208,3 +208,111 @@ return Response(content=data, media_type="application/xml")
 #使用Reponse可以直接返回数据格式本身
 Response(content=内容，media_type="数据格式")
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+常见响应类和自定义响应类
+没有media_type的响应类不会声称在openapi的文档中
+
+响应模型、默认编码方式和自定义json响应模型
+#响应模型可以用类型注释和response_model两种类型
+
+HEML响应
+#html响应有两种使用方法，使用响应类或者直接返回响应对象
+1.使用响应类
+@app.get("/items/", response_class=HTMLResponse)          #再路由中声明响应类，文本内容要写很长，优点是可以在交互文档中显示
+ return """  html文本内容 """
+2.直接返回响应对象
+@app.get("/items/")
+async def read_items():
+       html_content = """html文本内容"""
+       return HTMLResponse(content=html_content, status_code=200)    #直接返回响应对象，无法显示在交互文档中，优点是方便优雅
+
+#当两者都使用时，既可以在文档中显示响应类型又可以优雅的返回响应对象
+以下：
+@app.get("/items/", response_class=HTMLResponse) 
+async def read_items():
+       html_content = """html文本内容"""
+       return HTMLResponse(content=html_content, status_code=200)
+
+
+
+7个可选响应
+#通常响应类的参数有4个
+#content：返回内容-str 或者 bytes格式；status_code：状态码-int格式
+#headers：响应头-由字符串组成的 dict；media_type：媒体类型-str格式，如"text/html"等
+#content是必选，其它三个是可选
+
+1.Response
+最上层的父类，所有的响应类都继承自这个父类。可以自定义返回响应的类型
+Response(content=data, media_type="application/xml")       #返回xml格式
+
+2.HTMLResponse
+参考上文
+
+3.JSONResponse
+默认的响应格式，如果没有”response_class=“的显示声明和响应类的直接使用，默认将数据转换成json格式
+
+4.PlaintTextResponse
+接受文本或者字节返回纯文本
+@app.get("/", response_class=PlainTextResponse)
+async def main():
+    return PlainTextResponse(content="Hello World")
+
+5.StreamingResponse
+#标准流式传输，是流式传输的底层实现类
+#EventSourceResponse是一种经过包装的符合SSE的流式传输类
+可以使用本章的使用方式
+async def fake_video_streamer():
+    for i in range(10):
+        yield b"some fake video bytes"
+        await anyio.sleep(0)
+
+@app.get("/", response_class=StreamingResponse)
+async def main():
+    return StreamingResponse(fake_video_streamer())    #这里没有content而是直接返回的一个函数
+ 
+也可以用标准的StreamingResponse实现方式
+@app.get("/", response_class=StreamingResponse)
+async def main():
+    for line in message.splitlines():
+        yield line.encode("utf-8")
+
+6.FileResponse
+用来发送文件，也是流式传输但这不重要
+#path - 要流式传输的文件的文件路径；headers - 任何自定义响应头，传入字典类型。
+#media_type - 媒体类型字符串，没有声明fastapi会根据文件名称自己推断；filename - 文件名
+使用方式
+return FileResponse("large-video-file.mp4")
+或者
+@app.get("/", response_class=FileResponse)
+async def main():
+    return "large-video-file.mp4"
+
+7.RedirectResponse
+重定向的意义是引导用户访问正确的url，提升用户体验，常常用在登录和url维护上
+使用方式
+return RedirectResponse("https://typer.tiangolo.com")
+或者
+@app.get("/fastapi", response_class=RedirectResponse)
+async def redirect_fastapi():
+    return "https://fastapi.tiangolo.com"                    #默认状态码是307，也可以手动设置状态码
+
+
+
+自定义响应----继承自Response的响应类
+创建自定义响应类，以使用常规响应类的方式使用它
+创建类
+class CustomORJSONResponse(Response):
+    media_type = "application/json"                #参数类型
+
+    def render(self, content: Any) -> bytes:     #主函数
+        assert orjson is not None, "orjson must be installed"
+        return orjson.dumps(content, option=orjson.OPT_INDENT_2)
+#定义一个类，类里面包含参数类型和主函数
+使用方式
+@app.get("/", response_class=CustomORJSONResponse)
+
+
+
+全局响应类
+#创建fastapi命令对象时，声明响应类型HTMLResponse可以使所有路径操作默认使用声明的响应HTMLResponse
+app = FastAPI(default_response_class=HTMLResponse)
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
