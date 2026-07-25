@@ -316,3 +316,74 @@ class CustomORJSONResponse(Response):
 #创建fastapi命令对象时，声明响应类型HTMLResponse可以使所有路径操作默认使用声明的响应HTMLResponse
 app = FastAPI(default_response_class=HTMLResponse)
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+OpenAPI中增加额外响应
+responses：在openapi中添加多个响应描述
+#一个操作函数可以有很多个响应，如：主响应200和副响应422、302等
+#response_class可以在openapi中描述一个响应，剩下的需要使用responses参数描述
+
+使用方法
+1.基础用法
+@app.get("/items/{item_id}",response_model=Item,responses={404:{"model":pydantic模型}})
+#在主响应后面加上副响应，副响应有状态码和模型构成，这里的副响应只是在openapi中增加了描述，而没有实际的限制
+
+2.双状态码使用
+responses={
+             200:{"content":{"image/png"},"description":"返回图片"},
+             404:{"model":Item,"description":"没有这个英雄"}
+         }
+#可以描述两个状态码，一个是响应成功的状态码，一个是响应失败的状态码
+#如果response_model和responses中的状态码产生冲突，openapi优先使用responses中的描述
+
+3.预制状态码
+responses = {
+    404: {"description": "Item not found"},
+    302: {"description": "The item was moved"},
+    403: {"description": "Not enough privileges"},
+}
+responses={
+            **responses,
+            200:{"content":{"image/png"},"description":"返回图片"}
+        }
+#对于多个操作函数都要用到的状态码，可以打包成一个字典，通过解包的形式传入多个操作函数
+#这样做结构清晰，简单便捷；同时还可以对解包的状态码增添新的内容
+
+
+响应关联
+#对于重新声明的状态码，最好使用一个响应类接住，否则这种声明可能是多余操作
+@app.get("/items/{item_id}",response_model=Item,responses={404:{"model":pydantic模型}})                 #声明404
+async def read_item(item_id:str):
+     if item_id=="foo":
+         return {"id":"foo","value":"这是我的英雄"}
+     return JSONResponse(content={"message":"数据"},status_code=404)
+#用一个真实的JSONResponse响应类接住，如此注释便有了意义
+
+
+
+JSON Schema中的额外响应的响应格式
+#responses所写入openapi的额外响应无法自由的手动写入
+#responses组成的响应格式由两部分组成：path和schema
+path结构
+"responses": {
+        "404": {
+            "description": "Additional Response",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "$ref": "#/components/schemas/Message"
+                 ............
+schema结构
+schemas": {
+            "Message": {
+                "title": "Message",
+                "required": [
+                    "message"
+                ],
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "title": "Message",
+                        "type": "string"
+                ........
+#完整的json文档由这两部组成，path就像是目录而schema是用来描述openapi文档的结构的代码
+#通过path来找schema，通过schema来描述openapi文档
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
