@@ -387,3 +387,23 @@ schemas": {
 #完整的json文档由这两部组成，path就像是目录而schema是用来描述openapi文档的结构的代码
 #通过path来找schema，通过schema来描述openapi文档
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+响应cookie
+cookie:是请求的一部分，主要负责保持登录状态和个性化设置
+
+set_cookie--增添cookie的方法
+response.set_cookie(key="cookie的名字", value="cookie存储的数据")
+
+操作响应的方法
+1.路由引入
+def create_cookie(response: Response):
+       response.set_cookie(key="cookie的名字", value="cookie存储的数据")
+#路由引入方便优雅，但是无法进行复杂的reponse设置，适合只对加响应一个cookie或者请求头的情况
+#使用路由设置的响应的响应体一定是一个字典
+
+2.显式声明
+    content = {"message": "Come to the dark side, we have cookies"}
+    response = JSONResponse(content=content)
+    response.set_cookie(key="fakesession", value="fake-cookie-session-value")
+#显示声明是一种正式的声明方法，适合复杂的响应设置：自定义状态码、响应描述和响应名称；或者直接使用特定的响应模块：重定向和文件下载
+#路由引入最终会转换为显示声明
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
