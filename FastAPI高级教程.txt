@@ -444,3 +444,51 @@ def get_or_create_task(task_id: str, response: Response):       #导入临时响
 1.定义多个响应类，笨重单可以应对复杂情况
 2.对单一的响应类进行多次修改，优雅但是无法应对特殊情况
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+关于fastapi函数/依赖项的参数
+函数依赖项可以带参数，类依赖项可以定义属性
+#依赖项不仅可以是函数和类，还可以是类的实例
+#一个类可以生成多个实例以应对不同的需求
+
+实现方式
+1.创建一个带有实例属性的类
+class FixedContentQueryChecker:
+    def __init__(self, fixed_content: str):
+        self.fixed_content = fixed_content
+    def __call__(self, q: str = ""):
+
+2.创建类的实例
+checker = FixedContentQueryChecker("bar")
+
+3.将实例作为依赖项导入操作函数
+async def read_query_check(fixed_content_included: Annotated[bool, Depends(checker)]):
+#通过改变参数的方式，一个类可以应对不同的需求
+
+
+
+带yield的依赖项
+依赖项的关闭时机
+Depends(get_username, scope="function")：默认情况，会在响应发送后关闭依赖项
+Depends(get_username, scope="function")：会在依赖项运行完后关闭依赖项
+
+第二种可以在一些情况下增加程序性能
+#如果数据库一次性取出所有值，但是路径操作函数的响应是流式输出，在这种情况下需要提前关闭数据库连接可以释放效能，以下：
+def get_session():
+    with Session(engine) as session:
+        yield session                                           #常规的数据库连接
+def get_user(user_id: int, session: Annotated[Session, Depends(get_session)]):
+    user = session.get(User, user_id)               #总是一次性取值
+
+@app.get("/generate", dependencies=[Depends(get_user)])
+def generate(query: str):
+    return StreamingResponse(content=generate_stream(query))   #流式传输但不涉及数据库，如果不及时关闭数据库，它就会一直在后台挂着浪费资源
+#这样的情况不多，但需要了解
+
+关于后台任务
+#带有yield依赖项，只保证在当前请求生命周期内有效；不要把它传给后台任务、异步队列任务、定时任务等请求之外的工作
+原因--以数据库来连接为例：
+如果两者使用同一个连接，占用时间将会过长
+响应----->用户---请求--->后台任务
+原始一套连接的情况：连接全程开启
+现版本两套连接的情况：“响应”“后台任务”时开启，“----->用户---请求--->”关闭，大大节约了连接占用时间
+#总之，如果后台任务和流式传输是独立的，就可以提前关闭操作函数；如果它们会用到操作函数中的内容，就不能提前关闭
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
